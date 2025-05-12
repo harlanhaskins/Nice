@@ -10,6 +10,8 @@ import NiceTypes
 @preconcurrency import SQLite
 import System
 import Foundation
+import Hummingbird
+import HummingbirdAuth
 
 struct User: Sendable, Codable {
     static let table = Table("user")
@@ -193,10 +195,12 @@ final class UserController: Sendable {
     }
 
     func refreshExpiration(for token: inout Token) throws {
-        token.expires = dateProvider.newExpirationDate
-        let refreshToken = Token.table.filter(Token.id == Int64(token.id)).update(
-            Token.expires <- Int64(token.expires.timeIntervalSince1970))
+        let newExpiration = dateProvider.newExpirationDate
+        let seconds = Int64(newExpiration.timeIntervalSince1970)
+        let refreshToken = Token.table.filter(Token.content == token.content).update(
+            Token.expires <- seconds)
         try db.run(refreshToken)
+        token.expires = Date(timeIntervalSince1970: TimeInterval(seconds))
     }
 
     func refreshOrCreateToken(userID: Int) throws -> Token {
@@ -235,12 +239,7 @@ final class UserController: Sendable {
         }
 
         do {
-            let newExpiration = dateProvider.newExpirationDate
-            let seconds = Int64(newExpiration.timeIntervalSince1970)
-            let refreshToken = Token.table.filter(Token.content == token.content).update(
-                Token.expires <- seconds)
-            try db.run(refreshToken)
-            token.expires = Date(timeIntervalSince1970: TimeInterval(seconds))
+            try refreshExpiration(for: &token)
         } catch {
             print("Failed to refresh token for user \(token.userID)")
         }
@@ -315,5 +314,60 @@ final class UserController: Sendable {
             longitude: location?.longitude)
         let newToken = try refreshOrCreateToken(userID: Int(id))
         return (newUser, newToken)
+    }
+}
+
+extension UserController {
+    func addUnauthenticatedRoutes(to router: some RouterMethods) {
+        router
+            .post("auth") { request, context in
+                let authenticateUser = try await request.decode(
+                    as: AuthenticateRequest.self,
+                    context: context
+                )
+                do {
+                    let token = try self.authenticate(
+                        username: authenticateUser.username,
+                        password: authenticateUser.password
+                    )
+                    return Authentication(
+                        user: UserDTO(id: token.userID, username: authenticateUser.username),
+                        token: TokenDTO(userID: token.userID, token: token.content, expires: token.expires)
+                    )
+                }
+            }
+            .post("users") { request, context in
+                let createUser = try await request.decode(
+                    as: CreateUserRequest.self,
+                    context: context
+                )
+                do {
+                    let (user, token) = try self.create(
+                        username: createUser.username,
+                        password: createUser.password,
+                        location: createUser.location
+                    )
+                    return Authentication(user: user, token: token)
+                } catch let error as UserController.UserError {
+                    throw HTTPError(.unauthorized, message: error.message)
+                }
+            }
+    }
+
+    func addRoutes(to router: some RouterMethods<AuthenticatedRequestContext>) {
+        router
+            .put("auth") { request, context in
+                let auth = try context.requireIdentity()
+                return Authentication(user: auth.user, token: auth.token)
+            }
+            .put("location") { request, context in
+                let auth = try context.requireIdentity()
+                let location = try await request.decode(
+                    as: Location.self,
+                    context: context
+                )
+                try self.updateLocation(location, forUserID: auth.user.id)
+                return Response(status: .ok)
+            }
     }
 }

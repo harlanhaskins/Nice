@@ -27,6 +27,8 @@ enum AuthenticatorError: Error, CustomStringConvertible {
     }
 }
 
+typealias AuthenticatedRequestContext = BasicAuthRequestContext<ServerAuthentication>
+
 final class Authenticator: MiddlewareProtocol {
     /// The UserController instance to use for authentication
     private let userController: UserController
@@ -58,20 +60,21 @@ final class Authenticator: MiddlewareProtocol {
     /// - Parameter headers: HTTP headers containing authorization information
     /// - Returns: The authenticated user
     /// - Throws: Error if authentication fails or user not found
-    func authenticatedUser(headers: HTTPFields) throws -> User {
+    func authentication(headers: HTTPFields) throws -> ServerAuthentication {
         let tokenContent = try extractToken(from: headers)
         let token = try userController.authenticate(token: tokenContent)
-        return try userController.user(withID: token.userID)
+        let user = try userController.user(withID: token.userID)
+        return ServerAuthentication(user: user, token: token)
     }
 
     func handle(
         _ request: Request,
-        context: BasicAuthRequestContext<User>,
-        next: (Request, BasicAuthRequestContext<User>) async throws -> Response
+        context: BasicAuthRequestContext<ServerAuthentication>,
+        next: (Request, BasicAuthRequestContext<ServerAuthentication>) async throws -> Response
     ) async throws -> Response {
         var context = context
         do {
-            context.identity = try authenticatedUser(headers: request.headers)
+            context.identity = try authentication(headers: request.headers)
         } catch {
             throw HTTPError(.unauthorized)
         }

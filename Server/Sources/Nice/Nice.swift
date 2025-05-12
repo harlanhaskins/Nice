@@ -22,7 +22,7 @@ struct Nice {
         let users = UserController(db: connection)
         try users.createTables()
 
-        let router = Router(context: BasicAuthRequestContext<User>.self)
+        let router = Router(context: AuthenticatedRequestContext.self)
         router.addMiddleware {
             LogRequestsMiddleware(.debug)
 
@@ -33,70 +33,19 @@ struct Nice {
             )
         }
 
-        router.put("auth") { request, context in
-            let authenticateUser = try await request.decode(
-                as: AuthenticateRequest.self,
-                context: context
-            )
-            do {
-                let token = try users.authenticate(
-                    username: authenticateUser.username,
-                    password: authenticateUser.password
-                )
-                return Authentication(
-                    user: UserDTO(id: token.userID, username: authenticateUser.username),
-                    token: TokenDTO(userID: token.userID, token: token.content, expires: token.expires)
-                )
-            }
-        }
+        users.addUnauthenticatedRoutes(to: router)
 
-        router.put("users") { request, context in
-            let createUser = try await request.decode(
-                as: CreateUserRequest.self,
-                context: context
-            )
-            do {
-                let (user, token) = try users.create(
-                    username: createUser.username,
-                    password: createUser.password,
-                    location: createUser.location
-                )
-                return Authentication(user: user, token: token)
-            } catch let error as UserController.UserError {
-                throw HTTPError(.unauthorized, message: error.message)
-            }
-        }
+        let authGroup = router.group().add(middleware: Authenticator(userController: users))
+        users.addRoutes(to: authGroup)
 
-        router.group()
-            .add(middleware: Authenticator(userController: users))
-            .get("nice") { request, context in
-                let user = try context.requireIdentity()
-                guard let location = user.location else {
-                    throw HTTPError(.badRequest, message: "User '\(user.username)' does not have a location set")
-                }
-                do {
-                    let forecast = try await weather.forecast(
-                        for: location
-                    )
-                    return Int(forecast.temperature) == 69 ? "nice" : "not nice"
-                } catch {
-                    throw HTTPError(.badRequest)
-                }
+        authGroup.get("nice") { req, context in
+            let auth = try context.requireIdentity()
+            guard let location = auth.user.location else {
+                throw HTTPError(.badRequest, message: "Location must be set")
             }
-            .post("location") { request, context in
-                let user = try context.requireIdentity()
-                let location = try await request.decode(
-                    as: Location.self,
-                    context: context
-                )
-                try users.updateLocation(location, forUserID: user.id)
-                return Response(status: .ok)
-            }
-            .put("refresh") { request, context in
-                let user = try context.requireIdentity()
-                let token = try users.refreshOrCreateToken(userID: user.id)
-                return Authentication(user: user, token: token)
-            }
+            let forecast = try await weather.forecast(for: location)
+            return Int(forecast.temperature) == 69 ? "nice" : "not nice"
+        }
 
         let app = Application(
             router: router,
