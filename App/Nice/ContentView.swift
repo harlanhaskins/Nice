@@ -9,26 +9,17 @@ import NiceTypes
 import SwiftUI
 
 struct ContentView: View {
-    @State var controller = NiceController()
+    @State var authenticator = Authenticator()
     var body: some View {
         ZStack {
-            switch controller.authState {
+            switch authenticator.authState {
             case .unauthenticated:
-                SignInView(controller: controller)
+                SignInView(authenticator: authenticator)
             case .pendingRefresh:
                 ProgressView()
             case .authenticated(let auth):
-                MainView(user: auth.user)
+                MainView(auth: auth)
             }
-        }
-    }
-}
-
-struct MainView: View {
-    var user: UserDTO
-    var body: some View {
-        NavigationStack {
-            Text("Welcome, \(user.username)")
         }
     }
 }

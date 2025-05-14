@@ -26,11 +26,12 @@ actor HTTPClient {
 
     let urlSession: URLSession
     let baseURL: URL
-    var authentication: Authentication?
+    let authentication: Authentication?
 
-    init(baseURL: URL, urlSession: URLSession = .shared) {
+    init(baseURL: URL, authentication: Authentication?, urlSession: URLSession = .shared) {
         self.baseURL = baseURL
         self.urlSession = urlSession
+        self.authentication = authentication
     }
 
     enum HTTPMethod: String {
@@ -39,10 +40,6 @@ actor HTTPClient {
         var name: String {
             rawValue.uppercased()
         }
-    }
-
-    func updateAuthentication(_ auth: Authentication) {
-        self.authentication = auth
     }
 
     func makeRequest(
@@ -67,9 +64,13 @@ actor HTTPClient {
 
     func performRequest<Result: Decodable>(_ request: URLRequest) async throws -> Result {
         let (data, response) = try await urlSession.data(for: request)
-        guard let httpResponse = response as? HTTPURLResponse, (200..<300).contains(httpResponse.statusCode) else {
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw URLError(.badServerResponse)
+        }
+
+        guard (200..<300).contains(httpResponse.statusCode) else {
             let errorMessage = String(decoding: data, as: UTF8.self)
-            logger.error("Received error from server at '\(request.url!.path)': \(errorMessage)")
+            logger.error("Received \(httpResponse.statusCode) error from server at '\(request.url!.path)': \(errorMessage)")
             throw URLError(.badServerResponse)
         }
         return try decoder.decode(Result.self, from: data)
@@ -138,4 +139,8 @@ actor HTTPClient {
     ) async throws -> Result {
         try await send(.put, path: path, query: query, headers: headers)
     }
+}
+
+extension HTTPClient {
+    static let baseURL = URL(string: "http://127.0.0.1:8080")!
 }

@@ -24,7 +24,7 @@ struct Nice {
 
         let router = Router(context: AuthenticatedRequestContext.self)
         router.addMiddleware {
-            LogRequestsMiddleware(.debug)
+            LogRequestsMiddleware(.trace)
 
             CORSMiddleware(
                 allowOrigin: .originBased,

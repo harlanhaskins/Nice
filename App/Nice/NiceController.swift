@@ -2,55 +2,37 @@
 //  NiceController.swift
 //  Nice
 //
-//  Created by Harlan Haskins on 5/4/25.
+//  Created by Harlan Haskins on 5/12/25.
 //
 
-import Foundation
+
+import CoreLocation
 import NiceTypes
 import Observation
-import os
 
 @MainActor
 @Observable
 final class NiceController {
-    enum AuthenticationState {
-        case unauthenticated
-        case pendingRefresh(String)
-        case authenticated(Authentication)
+    let client: HTTPClient
+    let locationManager = CLLocationManager()
+    init(authentication: Authentication) {
+        client = HTTPClient(baseURL: HTTPClient.baseURL, authentication: authentication)
     }
 
-    let logger = Logger(subsystem: "com.harlanhaskins.Nice", category: "NiceController")
-    static let baseURL = URL(string: "http://127.0.0.1:8080")!
-    let client = HTTPClient(baseURL: NiceController.baseURL)
-    var authState: AuthenticationState = .unauthenticated
+    func loadNiceness() async throws -> String {
+        try await client.get("nice")
+    }
 
-    init() {
-        if let token = UserDefaults.standard.string(forKey: "APIToken") {
-            authState = .pendingRefresh(token)
-            Task {
-                try await refreshAuth(token)
-            }
+    func requestLocationUpdates() async throws {
+        switch locationManager.authorizationStatus {
+        case .authorizedAlways, .authorizedWhenInUse:
+            print("Authorized")
+        case .notDetermined:
+            print("Not determined")
+        case .denied, .restricted:
+            print("Denied")
+        @unknown default:
+            print("Nope")
         }
-    }
-
-    func refreshAuth(_ token: String) async throws {
-        do {
-            let auth: Authentication = try await client.put("refresh", headers: [
-                "Authorization": "Bearer \(token)"
-            ])
-            self.authState = .authenticated(auth)
-            logger.log("Token refresh successful; token: \(auth.token.token)")
-            await client.updateAuthentication(auth)
-        } catch {
-            authState = .unauthenticated
-        }
-    }
-
-    func signIn(username: String, password: String) async throws {
-        let request = AuthenticateRequest(username: username, password: password)
-        let auth: Authentication = try await client.put("auth", body: request)
-        logger.log("Authentication successful; token: \(auth.token.token)")
-        self.authState = .authenticated(auth)
-        await client.updateAuthentication(auth)
     }
 }

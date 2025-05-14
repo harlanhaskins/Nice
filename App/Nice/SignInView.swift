@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct SignInView: View {
-    var controller: NiceController
+    var authenticator: Authenticator
     @State private var username: String = "harlan"
     @State private var password: String = "helloworld"
 
@@ -29,7 +29,7 @@ struct SignInView: View {
     func signIn() {
         Task {
             do {
-                try await controller.signIn(
+                try await authenticator.signIn(
                     username: username.lowercased(),
                     password: password
                 )
@@ -38,9 +38,4 @@ struct SignInView: View {
             }
         }
     }
-}
-
-#Preview {
-    @Previewable @State var controller = NiceController()
-    SignInView(controller: controller)
 }
