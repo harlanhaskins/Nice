@@ -44,7 +44,7 @@ struct Nice {
                 throw HTTPError(.badRequest, message: "Location must be set")
             }
             let forecast = try await weather.forecast(for: location)
-            return Int(forecast.temperature) == 69 ? "nice" : "not nice"
+            return Niceness(isNice: Int(forecast.temperature) == 69)
         }
 
         let app = Application(

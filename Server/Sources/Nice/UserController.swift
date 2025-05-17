@@ -8,7 +8,6 @@
 import CryptoSwift
 import NiceTypes
 @preconcurrency import SQLite
-import System
 import Foundation
 import Hummingbird
 import HummingbirdAuth

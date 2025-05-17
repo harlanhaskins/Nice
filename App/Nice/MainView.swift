@@ -5,6 +5,7 @@
 //  Created by Harlan Haskins on 5/12/25.
 //
 
+import CoreLocationUI
 import NiceTypes
 import SwiftUI
 
@@ -24,6 +25,13 @@ struct MainView: View {
                 Text(niceness)
             }
             Text("Welcome, \(auth.user.username)")
+            LocationButton {
+                do {
+                    try controller.fetchWeather()
+                } catch {
+                    print("Failed")
+                }
+            }
         }
         .task {
             do {

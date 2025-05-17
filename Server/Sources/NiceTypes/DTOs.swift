@@ -66,3 +66,11 @@ public struct Authentication: DTO {
         self.token = token
     }
 }
+
+public struct Niceness: DTO {
+    public var isNice: Bool
+
+    public init(isNice: Bool) {
+        self.isNice = isNice
+    }
+}

@@ -5,10 +5,7 @@
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSExceptionDomains</key>
-		<dict>
-			<key>https://localhost</key>
-			<string></string>
-		</dict>
+		<dict/>
 	</dict>
 </dict>
 </plist>

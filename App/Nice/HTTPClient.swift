@@ -54,7 +54,7 @@ actor HTTPClient {
         var request = URLRequest(url: components.url!)
         request.httpMethod = method.name
         if let authentication {
-            request.setValue("Bearer \(authentication.token)", forHTTPHeaderField: "Authorization")
+            request.setValue("Bearer \(authentication.token.token)", forHTTPHeaderField: "Authorization")
         }
         for (header, value) in headers {
             request.setValue(value, forHTTPHeaderField: header)
@@ -74,6 +74,19 @@ actor HTTPClient {
             throw URLError(.badServerResponse)
         }
         return try decoder.decode(Result.self, from: data)
+    }
+
+    func performRequest(_ request: URLRequest) async throws {
+        let (data, response) = try await urlSession.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw URLError(.badServerResponse)
+        }
+
+        guard (200..<300).contains(httpResponse.statusCode) else {
+            let errorMessage = String(decoding: data, as: UTF8.self)
+            logger.error("Received \(httpResponse.statusCode) error from server at '\(request.url!.path)': \(errorMessage)")
+            throw URLError(.badServerResponse)
+        }
     }
 
     func send<Result: Decodable>(
@@ -96,6 +109,18 @@ actor HTTPClient {
         var request = makeRequest(method, path: path, query: query, headers: headers)
         request.httpBody = try encoder.encode(body)
         return try await performRequest(request)
+    }
+
+    func send<Body: Encodable>(
+        _ method: HTTPMethod,
+        path: String,
+        query: [URLQueryItem],
+        headers: [String: String],
+        body: Body
+    ) async throws {
+        var request = makeRequest(method, path: path, query: query, headers: headers)
+        request.httpBody = try encoder.encode(body)
+        try await performRequest(request)
     }
 
     func get<Result: Decodable>(
@@ -139,8 +164,17 @@ actor HTTPClient {
     ) async throws -> Result {
         try await send(.put, path: path, query: query, headers: headers)
     }
+
+    func put<Body: Encodable>(
+        _ path: String,
+        body: Body?,
+        query: [URLQueryItem] = [],
+        headers: [String: String] = [:]
+    ) async throws {
+        try await send(.put, path: path, query: query, headers: headers, body: body)
+    }
 }
 
 extension HTTPClient {
-    static let baseURL = URL(string: "http://127.0.0.1:8080")!
+    static let baseURL = URL(string: "https://nice.harlanhaskins.com")!
 }

@@ -23,6 +23,17 @@ final class NiceController {
         try await client.get("nice")
     }
 
+    func fetchWeather() throws {
+        guard let location = locationManager.location else {
+            return
+        }
+        let loc = Location(latitude: location.coordinate.latitude, longitude: location.coordinate.longitude)
+
+        Task {
+            try await client.put("location", body: loc)
+        }
+    }
+
     func requestLocationUpdates() async throws {
         switch locationManager.authorizationStatus {
         case .authorizedAlways, .authorizedWhenInUse:

@@ -7,6 +7,10 @@
 import Foundation
 import NiceTypes
 
+#if os(Linux)
+import FoundationNetworking
+#endif
+
 struct Forecast: DTO {
     var temperature: Double
     var feelsLike: Double
