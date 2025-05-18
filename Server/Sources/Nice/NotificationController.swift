@@ -11,9 +11,14 @@ import NIOPosix
 import Foundation
 import Logging
 @preconcurrency import SQLite
-import CryptoKit
 import Hummingbird
 import NiceTypes
+
+#if canImport(CryptoKit)
+import CryptoKit
+#else
+import Crypto
+#endif
 
 struct PushToken: Model {
     static let id = Expression<Int64>("id")
