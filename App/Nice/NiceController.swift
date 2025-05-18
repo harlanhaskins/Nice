@@ -9,18 +9,55 @@
 import CoreLocation
 import NiceTypes
 import Observation
+import UserNotifications
+import UIKit
 
 @MainActor
 @Observable
-final class NiceController {
+final class NiceController: NSObject, UNUserNotificationCenterDelegate {
     let client: HTTPClient
     let locationManager = CLLocationManager()
+    let notificationCenter = UNUserNotificationCenter.current()
+
     init(authentication: Authentication) {
         client = HTTPClient(baseURL: HTTPClient.baseURL, authentication: authentication)
+        super.init()
+        notificationCenter.delegate = self
+        NotificationCenter.default.addObserver(self, selector: #selector(didReceiveNotificationUpdate), name: .didReceiveRemoteNotificationToken, object: nil)
+        didReceiveNotificationUpdate()
     }
 
     func loadNiceness() async throws -> Niceness {
         try await client.get("nice")
+    }
+
+    @objc func didReceiveNotificationUpdate() {
+        Task {
+            try await performNotificationRegistration()
+        }
+    }
+
+    func performNotificationRegistration() async throws {
+        guard let deviceToken = UserDefaults.standard.string(forKey: UserDefaultsKey.deviceToken.rawValue) else {
+            return
+        }
+        try await client.put(
+            "notifications",
+            body: PushTokenDTO(token: deviceToken, deviceType: .iOS)
+        )
+    }
+
+    func registerForNotifications() {
+        Task {
+            do {
+                if try await notificationCenter.requestAuthorization() {
+                    UIApplication.shared.registerForRemoteNotifications()
+                    try await performNotificationRegistration()
+                }
+            } catch {
+                print("Failed to register: \(error)")
+            }
+        }
     }
 
     func fetchWeather() throws {

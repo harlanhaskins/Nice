@@ -36,21 +36,21 @@ public struct AuthenticateRequest: DTO {
 }
 
 public struct UserDTO: DTO {
-    public var id: Int
+    public var id: Int64
     public var username: String
 
-    public init(id: Int, username: String) {
+    public init(id: Int64, username: String) {
         self.id = id
         self.username = username
     }
 }
 
 public struct TokenDTO: DTO {
-    public var userID: Int
+    public var userID: Int64
     public var token: String
     public var expires: Date
 
-    public init(userID: Int, token: String, expires: Date) {
+    public init(userID: Int64, token: String, expires: Date) {
         self.userID = userID
         self.token = token
         self.expires = expires
@@ -72,5 +72,19 @@ public struct Niceness: DTO {
 
     public init(isNice: Bool) {
         self.isNice = isNice
+    }
+}
+
+public enum DeviceType: String, DTO {
+    case iOS
+}
+
+public struct PushTokenDTO: DTO {
+    public var token: String
+    public var deviceType: DeviceType
+
+    public init(token: String, deviceType: DeviceType) {
+        self.token = token
+        self.deviceType = deviceType
     }
 }

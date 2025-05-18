@@ -16,6 +16,10 @@ struct Forecast: DTO {
     var feelsLike: Double
     var currentTime: Date
 
+    var isNice: Bool {
+        Int(temperature) == 69 || Int(feelsLike) == 69
+    }
+
     enum CodingKeys: String, CodingKey {
         case temperature = "temp"
         case feelsLike = "feels_like"

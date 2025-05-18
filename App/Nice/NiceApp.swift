@@ -9,6 +9,8 @@ import SwiftUI
 
 @main
 struct NiceApp: App {
+    @UIApplicationDelegateAdaptor private var appDelegate: AppDelegate
+
     var body: some Scene {
         WindowGroup {
             ContentView()

@@ -26,6 +26,15 @@ struct MainView: View {
                     .font(.largeTitle)
             }
             Text("Welcome, \(auth.user.username)")
+
+            Button("Register for notifications") {
+                do {
+                    try controller.registerForNotifications()
+                } catch {
+                    print("Failed")
+                }
+            }
+
             LocationButton {
                 do {
                     try controller.fetchWeather()
@@ -41,6 +50,7 @@ struct MainView: View {
                     }
                 }
             }
+            .clipShape(.capsule)
         }
         .task {
             do {

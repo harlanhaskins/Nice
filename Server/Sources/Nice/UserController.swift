@@ -11,9 +11,9 @@ import NiceTypes
 import Foundation
 import Hummingbird
 import HummingbirdAuth
+import Logging
 
-struct User: Sendable, Codable {
-    static let table = Table("user")
+struct User: Model, Codable {
     static let id = Expression<Int64>("id")
     static let username = Expression<String>("username")
     static let passwordHash = Expression<String>("passwordHash")
@@ -21,7 +21,7 @@ struct User: Sendable, Codable {
     static let latitude = Expression<Double?>("latitude")
     static let longitude = Expression<Double?>("longitude")
 
-    let id: Int
+    let id: Int64
     var username: String
     var passwordHash: String
     var salt: String
@@ -41,8 +41,8 @@ struct User: Sendable, Codable {
 }
 
 extension User {
-    init(row: Row) {
-        id = Int(row[User.id])
+    init(_ row: Row) {
+        id = row[User.id]
         username = row[User.username]
         passwordHash = row[User.passwordHash]
         salt = row[User.salt]
@@ -51,15 +51,14 @@ extension User {
     }
 }
 
-struct Token: Sendable, Codable {
-    static let table = Table("token")
+struct Token: Model, Codable {
     static let id = Expression<Int64>("id")
     static let userID = Expression<Int64>("userID")
     static let content = Expression<String>("content")
     static let expires = Expression<Int64>("expires")
 
-    var id: Int
-    var userID: Int
+    var id: Int64
+    var userID: Int64
     var content: String
     var expires: Date
 
@@ -75,9 +74,9 @@ extension Authentication {
 }
 
 extension Token {
-    init(row: Row) {
-        id = Int(row[Token.id])
-        userID = Int(row[Token.userID])
+    init(_ row: Row) {
+        id = row[Token.id]
+        userID = row[Token.userID]
         content = row[Token.content]
         expires = Date(timeIntervalSince1970: TimeInterval(row[Token.expires]))
     }
@@ -147,6 +146,7 @@ final class UserController: Sendable {
     let db: Connection
     let dateProvider: DateProviding
     let passwordHasher: PasswordHashing
+    let logger = Logger(label: "UserController")
 
     init(
         db: Connection,
@@ -163,7 +163,7 @@ final class UserController: Sendable {
         if !userColumns.isEmpty {
             return
         }
-        print("No users table found in database; creating table...")
+        logger.info("No users table found in database; creating table...")
         try db.run(User.table.create { t in
             t.column(User.id, primaryKey: true)
             t.column(User.username, unique: true)
@@ -182,20 +182,14 @@ final class UserController: Sendable {
     }
 
     func list() throws -> [User] {
-        let results = User.table.select(*)
-        var users: [User] = []
-        for row in try db.prepare(results) {
-            users.append(User(row: row))
-        }
-        return users
+        return try db.find()
     }
 
-    func user(withID id: Int) throws -> User {
-        let query = User.table.select(*).filter(User.id == Int64(id))
-        guard let row = try db.prepare(query).first(where: { _ in true }) else {
+    func user(withID id: Int64) throws -> User {
+        guard let user = try db.first(User.self, User.id == id) else {
             throw UserError.notFound("\(id)")
         }
-        return User(row: row)
+        return user
     }
 
     func refreshExpiration(for token: inout Token) throws {
@@ -207,37 +201,32 @@ final class UserController: Sendable {
         token.expires = Date(timeIntervalSince1970: TimeInterval(seconds))
     }
 
-    func refreshOrCreateToken(userID: Int) throws -> Token {
-        let query = Token.table.select(*).filter(Token.userID == Int64(userID))
-
-        if let row = try db.prepare(query).first(where: { _ in true }) {
-            var token = Token(row: row)
+    func refreshOrCreateToken(userID: Int64) throws -> Token {
+        if var token = try db.first(Token.self, Token.userID == Int64(userID)) {
             try refreshExpiration(for: &token)
             return token
         } else {
             let uuid = withUnsafeBytes(of: UUID().uuid, Array.init)
             var token = Token(
                 id: 0,
-                userID: Int(userID),
+                userID: userID,
                 content: uuid.toHexString(),
                 expires: dateProvider.newExpirationDate
             )
             let query = Token.table.insert(
-                Token.userID <- Int64(userID),
+                Token.userID <- userID,
                 Token.content <- token.content,
                 Token.expires <- Int64(token.expires.timeIntervalSince1970)
             )
-            token.id = Int(try db.run(query))
+            token.id = try db.run(query)
             return token
         }
     }
 
     func authenticate(token: String) throws -> Token {
-        let query = Token.table.select(*).filter(Token.content == token)
-        guard let row = try db.prepare(query).first(where: { _ in true }) else {
+        guard var token = try db.first(Token.self, Token.content == token) else {
             throw UserError.notFound(token)
         }
-        var token = Token(row: row)
         if token.expires < dateProvider.now {
             throw UserError.tokenExpired
         }
@@ -252,25 +241,19 @@ final class UserController: Sendable {
     }
 
     func authenticate(username: String, password: String) throws -> Token {
-        let findUsers = User.table.select(*).filter(User.username == username)
-        guard let user = try db.prepare(findUsers).first(where: { _ in true }) else {
+        guard let user = try db.first(User.self, User.username == username) else {
             throw UserError.notFound(username)
         }
 
-        let id = user[User.id]
-        let hash = user[User.passwordHash]
-        let salt = user[User.salt]
-
-        let digest = try passwordHasher.computePasswordHash(password: password, salt: salt)
-        if digest != hash {
+        let digest = try passwordHasher.computePasswordHash(password: password, salt: user.salt)
+        if digest != user.passwordHash {
             throw UserError.incorrectPassword(user: username)
         }
-        return try refreshOrCreateToken(userID: Int(id))
+        return try refreshOrCreateToken(userID: user.id)
     }
 
-    func updateLocation(_ location: Location, forUserID userID: Int) throws {
-        let query = User.table
-            .filter(User.id == Int64(userID))
+    func updateLocation(_ location: Location, forUserID userID: Int64) throws {
+        let query = User.find(User.id == userID)
             .update(
                 User.latitude <- location.latitude,
                 User.longitude <- location.longitude
@@ -293,8 +276,7 @@ final class UserController: Sendable {
         var id: Int64 = 0
 
         try db.transaction {
-            let numberOfUsers = User.table.select(*).filter(User.username == username).count
-            guard try db.scalar(numberOfUsers) == 0 else {
+            guard try db.count(User.self, User.username == username) == 0 else {
                 throw UserError.userAlreadyExists(username)
             }
             
@@ -310,13 +292,13 @@ final class UserController: Sendable {
         }
 
         let newUser = User(
-            id: Int(id),
+            id: id,
             username: username,
             passwordHash: digest,
             salt: salt,
             latitude: location?.latitude,
             longitude: location?.longitude)
-        let newToken = try refreshOrCreateToken(userID: Int(id))
+        let newToken = try refreshOrCreateToken(userID: id)
         return (newUser, newToken)
     }
 }

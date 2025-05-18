@@ -8,7 +8,13 @@ struct Secrets: Codable {
     struct Weather: Codable {
         var apiKey: String
     }
+    struct APNS: Codable {
+        var keyID: String
+        var teamID: String
+        var privateKey: String
+    }
     var weather: Weather
+    var apns: APNS
 }
 
 @main
@@ -16,11 +22,15 @@ struct Nice {
     static func main() async throws {
         let secretsFile = Bundle.module.url(forResource: "secrets", withExtension: "json")!
         let secrets = try JSONDecoder().decode(Secrets.self, from: Data(contentsOf: secretsFile))
-        let weather = WeatherAPI(key: secrets.weather.apiKey)
 
         let connection = try Connection("nice.db")
         let users = UserController(db: connection)
         try users.createTables()
+
+        let notifications = try NotificationController(db: connection, users: users, secrets: secrets)
+        try notifications.createTables()
+
+        let nice = NiceController(users: users, notifications: notifications, secrets: secrets)
 
         let router = Router(context: AuthenticatedRequestContext.self)
         router.addMiddleware {
@@ -37,14 +47,15 @@ struct Nice {
 
         let authGroup = router.group().add(middleware: Authenticator(userController: users))
         users.addRoutes(to: authGroup)
+        notifications.addRoutes(to: authGroup)
+        nice.addRoutes(to: authGroup)
 
-        authGroup.get("nice") { req, context in
-            let auth = try context.requireIdentity()
-            guard let location = auth.user.location else {
-                throw HTTPError(.badRequest, message: "Location must be set")
+        let runner = JobRunner(nice: nice)
+        await runner.start()
+        defer {
+            Task {
+                await runner.stop()
             }
-            let forecast = try await weather.forecast(for: location)
-            return Niceness(isNice: Int(forecast.temperature) == 69)
         }
 
         let app = Application(
