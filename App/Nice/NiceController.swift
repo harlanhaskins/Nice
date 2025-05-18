@@ -50,7 +50,7 @@ final class NiceController: NSObject, UNUserNotificationCenterDelegate {
     func registerForNotifications() {
         Task {
             do {
-                if try await notificationCenter.requestAuthorization() {
+                if try await notificationCenter.requestAuthorization(options: [.alert]) {
                     UIApplication.shared.registerForRemoteNotifications()
                     try await performNotificationRegistration()
                 }

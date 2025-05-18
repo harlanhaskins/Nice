@@ -114,7 +114,7 @@ final class NotificationController: Sendable {
             do {
                 try await client.sendAlertNotification(
                     .init(
-                        alert: .init(title: .raw("😎"), subtitle: .raw("Nice")),
+                        alert: .init(title: .raw("Nice")),
                         expiration: .none,
                         priority: .immediately,
                         topic: "com.harlanhaskins.Nice",
