@@ -18,7 +18,7 @@ struct Nice {
         let secrets = try JSONDecoder().decode(Secrets.self, from: Data(contentsOf: secretsFile))
         let weather = WeatherAPI(key: secrets.weather.apiKey)
 
-        let connection = try Connection(.inMemory)
+        let connection = try Connection("nice.db")
         let users = UserController(db: connection)
         try users.createTables()
 

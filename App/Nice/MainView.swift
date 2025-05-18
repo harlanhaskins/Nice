@@ -11,7 +11,7 @@ import SwiftUI
 
 struct MainView: View {
     @State var controller: NiceController
-    @State var niceness: String?
+    @State var niceness: Niceness?
     var auth: Authentication
 
     init(auth: Authentication) {
@@ -22,7 +22,8 @@ struct MainView: View {
     var body: some View {
         NavigationStack {
             if let niceness {
-                Text(niceness)
+                Text(niceness.isNice ? "😎" : "😐")
+                    .font(.largeTitle)
             }
             Text("Welcome, \(auth.user.username)")
             LocationButton {
@@ -30,6 +31,14 @@ struct MainView: View {
                     try controller.fetchWeather()
                 } catch {
                     print("Failed")
+                }
+
+                Task {
+                    do {
+                        niceness = try await controller.loadNiceness()
+                    } catch {
+                        print("\(error)")
+                    }
                 }
             }
         }

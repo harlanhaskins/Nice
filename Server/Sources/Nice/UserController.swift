@@ -159,6 +159,11 @@ final class UserController: Sendable {
     }
 
     func createTables() throws {
+        let userColumns = try db.schema.columnDefinitions(table: "user")
+        if !userColumns.isEmpty {
+            return
+        }
+        print("No users table found in database; creating table...")
         try db.run(User.table.create { t in
             t.column(User.id, primaryKey: true)
             t.column(User.username, unique: true)

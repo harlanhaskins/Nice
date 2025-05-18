@@ -19,7 +19,7 @@ final class NiceController {
         client = HTTPClient(baseURL: HTTPClient.baseURL, authentication: authentication)
     }
 
-    func loadNiceness() async throws -> String {
+    func loadNiceness() async throws -> Niceness {
         try await client.get("nice")
     }
 
