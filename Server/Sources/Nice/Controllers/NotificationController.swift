@@ -39,27 +39,27 @@ struct PushToken: Model {
     }
 }
 
-final class NotificationController: Sendable {
-    enum NotificationError: Error {
-        case couldNotFindPrivateKey
+protocol Notifier: Sendable {
+    func sendNotification(deviceToken: String) async throws
+    func shutdown() async throws
+}
+
+extension Notifier {
+    func shutdown() {
     }
-    let db: Connection
-    let users: UserController
+}
+
+struct APNSNotifier: Notifier {
     let client: APNSClient<JSONDecoder, JSONEncoder>
-    let logger = Logger(label: "NotificationController")
-
-    init(db: Connection, users: UserController, secrets: Secrets) throws {
-        self.db = db
-        self.users = users
-
-        let privateKey = try P256.Signing.PrivateKey(pemRepresentation: secrets.apns.privateKey)
+    init(secrets: Secrets.APNS) throws {
+        let privateKey = try P256.Signing.PrivateKey(pemRepresentation: secrets.privateKey)
 
         self.client = APNSClient(
             configuration: .init(
                 authenticationMethod: .jwt(
                     privateKey: privateKey,
-                    keyIdentifier: secrets.apns.keyID,
-                    teamIdentifier: secrets.apns.teamID
+                    keyIdentifier: secrets.keyID,
+                    teamIdentifier: secrets.teamID
                 ),
                 environment: .development
             ),
@@ -69,9 +69,42 @@ final class NotificationController: Sendable {
         )
     }
 
+    func sendNotification(deviceToken: String) async throws {
+        try await client.sendAlertNotification(
+            .init(
+                alert: .init(title: .raw("Nice")),
+                expiration: .none,
+                priority: .immediately,
+                topic: "com.harlanhaskins.Nice",
+                payload: [String: String]()
+            ),
+            deviceToken: deviceToken
+        )
+    }
+
+    func shutdown() async throws {
+        try await client.shutdown()
+    }
+}
+
+final class NotificationController: Sendable {
+    enum NotificationError: Error {
+        case couldNotFindPrivateKey
+    }
+    let db: Connection
+    let users: UserController
+    let notifier: Notifier
+    let logger = Logger(label: "NotificationController")
+
+    init(db: Connection, users: UserController, notifier: some Notifier) {
+        self.db = db
+        self.users = users
+        self.notifier = notifier
+    }
+
     deinit {
-        Task { [client] in
-            try await client.shutdown()
+        Task { [notifier] in
+            try await notifier.shutdown()
         }
     }
 
@@ -112,16 +145,7 @@ final class NotificationController: Sendable {
         let tokens = try db.find(PushToken.self, PushToken.userID == userID)
         for token in tokens {
             do {
-                try await client.sendAlertNotification(
-                    .init(
-                        alert: .init(title: .raw("Nice")),
-                        expiration: .none,
-                        priority: .immediately,
-                        topic: "com.harlanhaskins.Nice",
-                        payload: [String: String]()
-                    ),
-                    deviceToken: token.token
-                )
+                try await notifier.sendNotification(deviceToken: token.token)
             } catch let error as APNSError {
                 logger.error("\(error)")
                 if error.reason == .badDeviceToken {

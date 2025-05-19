@@ -1,5 +1,5 @@
 //
-//  NiceController.swift
+//  Authenticator.swift
 //  Nice
 //
 //  Created by Harlan Haskins on 5/4/25.

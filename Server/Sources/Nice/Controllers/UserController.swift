@@ -18,22 +18,11 @@ struct User: Model, Codable {
     static let username = Expression<String>("username")
     static let passwordHash = Expression<String>("passwordHash")
     static let salt = Expression<String>("salt")
-    static let latitude = Expression<Double?>("latitude")
-    static let longitude = Expression<Double?>("longitude")
 
     let id: Int64
     var username: String
     var passwordHash: String
     var salt: String
-    var latitude: Double?
-    var longitude: Double?
-
-    var location: Location? {
-        guard let latitude, let longitude else {
-            return nil
-        }
-        return Location(latitude: latitude, longitude: longitude)
-    }
 
     var dto: UserDTO {
         UserDTO(id: id, username: username)
@@ -46,8 +35,6 @@ extension User {
         username = row[User.username]
         passwordHash = row[User.passwordHash]
         salt = row[User.salt]
-        latitude = row[User.latitude]
-        longitude = row[User.longitude]
     }
 }
 
@@ -169,8 +156,6 @@ final class UserController: Sendable {
             t.column(User.username, unique: true)
             t.column(User.passwordHash)
             t.column(User.salt)
-            t.column(User.latitude)
-            t.column(User.longitude)
         })
 
         try db.run(Token.table.create { t in
@@ -267,15 +252,6 @@ final class UserController: Sendable {
         return try refreshOrCreateToken(userID: user.id)
     }
 
-    func updateLocation(_ location: Location, forUserID userID: Int64) throws {
-        let query = User.find(User.id == userID)
-            .update(
-                User.latitude <- location.latitude,
-                User.longitude <- location.longitude
-            )
-        try db.run(query)
-    }
-
     func create(
         username: String,
         password: String,
@@ -299,9 +275,7 @@ final class UserController: Sendable {
             let insertion = User.table.insert(
                 User.username <- username,
                 User.passwordHash <- digest,
-                User.salt <- salt,
-                User.latitude <- location?.latitude,
-                User.longitude <- location?.longitude)
+                User.salt <- salt)
 
             id = try db.run(insertion)
         }
@@ -310,9 +284,7 @@ final class UserController: Sendable {
             id: id,
             username: username,
             passwordHash: digest,
-            salt: salt,
-            latitude: location?.latitude,
-            longitude: location?.longitude)
+            salt: salt)
         let newToken = try refreshOrCreateToken(userID: id)
         return (newUser, newToken)
     }
@@ -360,15 +332,6 @@ extension UserController {
             .put("auth") { request, context in
                 let auth = try context.requireIdentity()
                 return Authentication(user: auth.user, token: auth.token)
-            }
-            .put("location") { request, context in
-                let auth = try context.requireIdentity()
-                let location = try await request.decode(
-                    as: Location.self,
-                    context: context
-                )
-                try self.updateLocation(location, forUserID: auth.user.id)
-                return Response(status: .ok)
             }
             .delete("users") { request, context in
                 let auth = try context.requireIdentity()

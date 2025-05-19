@@ -8,19 +8,25 @@
 import Foundation
 
 actor JobRunner {
-    let nice: NiceController
+    let weather: WeatherController
     var task: Task<Void, Error>?
 
-    init(nice: NiceController) {
-        self.nice = nice
+    init(weather: WeatherController) {
+        self.weather = weather
     }
 
     func start() {
         task = Task { [weak self] in
-            while true {
+            while !Task.isCancelled {
                 guard let self else { return }
-                await self.nice.runWeatherJob()
-                try await Task.sleep(for: .seconds(15 * 60))
+                await self.weather.runWeatherJob()
+                do {
+                    try await Task.sleep(for: .seconds(15 * 60))
+                } catch is CancellationError {
+                    break
+                } catch {
+                    continue
+                }
             }
         }
     }

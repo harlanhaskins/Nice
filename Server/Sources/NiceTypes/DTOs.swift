@@ -18,7 +18,23 @@ public struct Forecast: DTO {
     public var clouds: Int
 
     public var isNice: Bool {
-        Int(temperature) == 69 || Int(feelsLike) == 69
+        Int(temperature) == 69
+    }
+
+    public init(
+        temperature: Double,
+        feelsLike: Double,
+        currentTime: Date,
+        sunset: Date,
+        sunrise: Date,
+        clouds: Int
+    ) {
+        self.temperature = temperature
+        self.feelsLike = feelsLike
+        self.currentTime = currentTime
+        self.sunset = sunset
+        self.sunrise = sunrise
+        self.clouds = clouds
     }
 
     public enum CodingKeys: String, CodingKey {

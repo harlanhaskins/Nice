@@ -5,7 +5,7 @@ import PackageDescription
 
 let package = Package(
     name: "Nice",
-    platforms: [.macOS(.v15), .iOS(.v17)],
+    platforms: [.macOS(.v15), .iOS(.v18)],
     products: [
         .executable(name: "Nice", targets: ["Nice"]),
         .library(name: "NiceTypes", targets: ["NiceTypes"])

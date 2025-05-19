@@ -27,10 +27,11 @@ struct Nice {
         let users = UserController(db: connection)
         try users.createTables()
 
-        let notifications = try NotificationController(db: connection, users: users, secrets: secrets)
+        let notifications = try NotificationController(db: connection, users: users, notifier: APNSNotifier(secrets: secrets.apns))
         try notifications.createTables()
 
-        let nice = NiceController(users: users, notifications: notifications, secrets: secrets)
+        let weather = WeatherController(db: connection, users: users, notifications: notifications, weatherProvider: WeatherAPI(key: secrets.weather.apiKey))
+        try weather.createTables()
 
         let router = Router(context: AuthenticatedRequestContext.self)
         router.addMiddleware {
@@ -48,9 +49,9 @@ struct Nice {
         let authGroup = router.group().add(middleware: Authenticator(userController: users))
         users.addRoutes(to: authGroup)
         notifications.addRoutes(to: authGroup)
-        nice.addRoutes(to: authGroup)
+        weather.addRoutes(to: authGroup)
 
-        let runner = JobRunner(nice: nice)
+        let runner = JobRunner(weather: weather)
         await runner.start()
         defer {
             Task {

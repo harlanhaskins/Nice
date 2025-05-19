@@ -72,8 +72,8 @@ struct AuthenticatorTests {
         let headers: HTTPFields = [.authorization: "Bearer \(token.content)"]
 
         // Test getting authenticated user
-        let user = try authenticator.authenticatedUser(headers: headers)
-        #expect(user.id == createdUser.id)
-        #expect(user.username == "homestar")
+        let auth = try authenticator.authentication(headers: headers)
+        #expect(auth.user.id == createdUser.id)
+        #expect(auth.user.username == "homestar")
     }
 }

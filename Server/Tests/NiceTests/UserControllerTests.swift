@@ -210,27 +210,6 @@ struct UserControllerTests {
     }
     
     @Test
-    func testLocationUpdate() throws {
-        let db = try Connection(.inMemory)
-        let controller = try makeTestController(db: db)
-        
-        let username = "trogdor"
-        let password = "BurnInatingTh3Countryside!"
-
-        let (user, _) = try controller.create(username: username, password: password)
-
-        let location = Location(latitude: 34.5, longitude: -82.3)
-        try controller.updateLocation(location, forUserID: user.id)
-        
-        // Verify the location update by directly querying the database
-        let query = User.table.select(User.latitude, User.longitude).filter(User.id == Int64(user.id))
-        let row = try db.prepare(query).first(where: { _ in true })!
-        
-        #expect(row[User.latitude] == location.latitude)
-        #expect(row[User.longitude] == location.longitude)
-    }
-    
-    @Test
     func testDateProviderAffectsTokenExpiration() throws {
         let db = try Connection(.inMemory)
         let dateProvider = MockDateProvider()

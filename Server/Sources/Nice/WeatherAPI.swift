@@ -11,7 +11,7 @@ import NiceTypes
 import FoundationNetworking
 #endif
 
-struct WeatherAPI {
+struct WeatherAPI: Sendable {
     enum WeatherError: Error {
         case apiFailure(String)
     }
