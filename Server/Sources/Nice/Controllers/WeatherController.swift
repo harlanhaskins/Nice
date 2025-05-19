@@ -139,6 +139,9 @@ final class WeatherController: Sendable {
             return
         }
 
+        let start = Date.now.timeIntervalSince1970
+        logger.info("Beginning weather job for \(users.count) users...")
+
         for user in users {
             if Task.isCancelled { return }
             guard let location = location(forUserID: user.id) else {
@@ -146,6 +149,9 @@ final class WeatherController: Sendable {
             }
             await runWeatherJob(for: user, entry: location)
         }
+
+        let end = Date.now.timeIntervalSince1970
+        logger.info("Ending weather job for \(users.count) users. Elapsed time: \(Int(end - start)) seconds")
     }
 
     func location(forUserID userID: Int64) -> UserLocation? {
