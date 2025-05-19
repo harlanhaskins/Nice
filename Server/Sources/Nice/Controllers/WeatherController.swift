@@ -89,45 +89,44 @@ final class WeatherController: Sendable {
             return
         }
 
-        var sendNotification = false
+        var suppressNotification = false
 
         if let lastTemperature = entry.lastTemperature, let lastNotificationDate = entry.lastNotificationDate {
             let timeSinceLastNotification = Date.now.timeIntervalSince(lastNotificationDate)
             let hasSentWithinLastHour = timeSinceLastNotification < (60 * 60)
             if lastTemperature == 69 && hasSentWithinLastHour {
-                logger.info("Skipping redundant notification for user '\(user.username)'; it's been continually nice out")
-                sendNotification = false
+                suppressNotification = true
             }
         }
 
-        // Update the entry in the database to mark that we looked it up
+        var entry = entry
 
-        do {
-            var entry = entry
-            if forecast.isNice {
-                sendNotification = true
-                entry.lastNotificationDate = Date()
+        if forecast.isNice {
+            if suppressNotification {
+                logger.error("Not sending notification for '\(user.username)'; it has been continually nice out")
             } else {
-                logger.info("Temperature for user '\(user.username)' is \(forecast.temperature); not sending notification")
+                do {
+                    try await notifications.sendNiceNotification(to: user.id)
+                } catch {
+                    logger.error("Failed to send notification for '\(user.username)': \(error)")
+                }
             }
+            entry.lastNotificationDate = Date()
+        } else {
+            logger.info("Temperature for user '\(user.username)' is \(forecast.temperature); not sending notification")
+        }
 
-            entry.lastTemperature = Int(forecast.temperature)
+        entry.lastTemperature = Int(forecast.temperature)
 
+        // Update the entry in the database to mark that we looked it up
+        do {
             let lastTimestamp = (entry.lastNotificationDate?.timeIntervalSince1970).map { Int64($0) }
             try db.run(UserLocation.table.update(
                 UserLocation.lastTemperature <- entry.lastTemperature,
                 UserLocation.lastNotificationDate <- lastTimestamp
             ))
         } catch {
-            logger.error("Failed to update user entry for notification")
-        }
-
-        if sendNotification {
-            do {
-                try await notifications.sendNiceNotification(to: user.id)
-            } catch {
-                logger.error("Failed to send nice notification for '\(user.username)': \(error)")
-            }
+            logger.error("Failed to update user entry for notification: \(error)")
         }
     }
 
