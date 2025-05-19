@@ -11,7 +11,7 @@ import SwiftUI
 
 struct MainView: View {
     @State var controller: NiceController
-    @State var niceness: Niceness?
+    @State var forecast: Forecast?
     var auth: Authentication
 
     init(auth: Authentication) {
@@ -20,44 +20,56 @@ struct MainView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            if let niceness {
-                Text(niceness.isNice ? "😎" : "😐")
-                    .font(.largeTitle)
+        VStack {
+            if let forecast {
+                Text(forecast.isNice ? "😎" : "😐")
+                    .font(.system(size: 120))
             }
             Text("Welcome, \(auth.user.username)")
 
-            Button("Register for notifications") {
-                do {
-                    try controller.registerForNotifications()
-                } catch {
-                    print("Failed")
+            if controller.notificationService.state == .indeterminate {
+                Button {
+                    controller.notificationService.registerForNotifications()
+                } label: {
+                    Text("Allow notifications")
                 }
             }
 
-            LocationButton {
-                do {
-                    try controller.fetchWeather()
-                } catch {
-                    print("Failed")
-                }
-
-                Task {
-                    do {
-                        niceness = try await controller.loadNiceness()
-                    } catch {
-                        print("\(error)")
-                    }
+            if controller.locationService.state == .indeterminate {
+                Button {
+                    controller.locationService.requestLocationUpdates()
+                } label: {
+                    Text("Allow location updates")
                 }
             }
-            .clipShape(.capsule)
         }
+        .buttonStyle(ActionButtonStyle())
         .task {
             do {
-                niceness = try await controller.loadNiceness()
+                forecast = try await controller.loadForecast()
             } catch {
                 print("\(error)")
             }
         }
+        .frame(maxWidth: 320)
     }
+}
+
+struct ActionButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .frame(maxWidth: .infinity)
+            .foregroundStyle(.white)
+            .font(.subheadline.bold())
+            .padding(.horizontal, 12)
+            .padding(.vertical, 12)
+            .background(.blue, in: .capsule)
+            .scaleEffect(configuration.isPressed ? 0.95 : 1)
+            .opacity(configuration.isPressed ? 0.8 : 1)
+            .animation(.snappy(duration: 0.2), value: configuration.isPressed)
+    }
+}
+
+#Preview {
+    MainView(auth: Authentication(user: UserDTO(id: 1, username: "harlan"), token: TokenDTO(userID: 1, token: "", expires: .now)))
 }

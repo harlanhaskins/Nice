@@ -10,7 +10,7 @@ import NiceTypes
 import os
 
 actor HTTPClient {
-    let logger = Logger(subsystem: "com.harlanhaskins.Nice", category: "HTTPClient")
+    let logger = Logger(for: HTTPClient.self)
 
     let encoder: JSONEncoder = {
         let e = JSONEncoder()

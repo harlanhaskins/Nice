@@ -67,13 +67,12 @@ final class NiceController: Sendable {
 
     func addRoutes(to router: some RouterMethods<AuthenticatedRequestContext>) {
         router
-            .get("nice") { req, context in
+            .get("forecast") { req, context in
                 let auth = try context.requireIdentity()
                 guard let location = auth.user.location else {
                     throw HTTPError(.badRequest, message: "Location must be set")
                 }
-                let forecast = try await self.weather.forecast(for: location)
-                return Niceness(isNice: forecast.isNice)
+                return try await self.weather.forecast(for: location)
             }
             .post("run") { req, context in
                 await self.runWeatherJob()

@@ -30,7 +30,7 @@ final class Authenticator {
     }
 
     let client = HTTPClient(baseURL: HTTPClient.baseURL, authentication: nil, urlSession: .shared)
-    let logger = Logger(subsystem: "com.harlanhaskins.Nice", category: "NiceController")
+    let logger = Logger(for: Authenticator.self)
     var authState: AuthenticationState = .unauthenticated
 
     init() {

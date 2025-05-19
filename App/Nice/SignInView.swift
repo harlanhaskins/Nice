@@ -18,8 +18,8 @@ struct SignInView: View {
                 .autocorrectionDisabled()
             SecureField("Password", text: $password)
             Button("Sign in", action: signIn)
-            .buttonStyle(.borderedProminent)
-            .disabled(username.isEmpty || password.count < 8)
+                .buttonStyle(ActionButtonStyle())
+                .disabled(username.isEmpty || password.count < 8)
         }
         .textFieldStyle(.roundedBorder)
         .frame(maxWidth: 320)

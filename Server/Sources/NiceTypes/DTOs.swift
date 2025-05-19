@@ -9,6 +9,28 @@ import Foundation
 
 public protocol DTO: Codable, Sendable, Equatable {}
 
+public struct Forecast: DTO {
+    public var temperature: Double
+    public var feelsLike: Double
+    public var currentTime: Date
+    public var sunset: Date
+    public var sunrise: Date
+    public var clouds: Int
+
+    public var isNice: Bool {
+        Int(temperature) == 69 || Int(feelsLike) == 69
+    }
+
+    public enum CodingKeys: String, CodingKey {
+        case temperature = "temp"
+        case feelsLike = "feels_like"
+        case currentTime = "dt"
+        case sunset
+        case sunrise
+        case clouds
+    }
+}
+
 public struct CreateUserRequest: DTO {
     public var username: String
     public var password: String
@@ -64,14 +86,6 @@ public struct Authentication: DTO {
     public init(user: UserDTO, token: TokenDTO) {
         self.user = user
         self.token = token
-    }
-}
-
-public struct Niceness: DTO {
-    public var isNice: Bool
-
-    public init(isNice: Bool) {
-        self.isNice = isNice
     }
 }
 

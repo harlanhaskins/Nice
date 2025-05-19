@@ -223,6 +223,21 @@ final class UserController: Sendable {
         }
     }
 
+    func deleteUser(_ user: User) throws {
+        // Delete the user record, all authorization tokens, and all push tokens
+        // for this user.
+
+        let deleteUser = User.find(User.id == user.id).delete()
+        let deletePushTokens = PushToken.find(PushToken.userID == user.id).delete()
+        let deleteAuthTokens = Token.find(Token.userID == user.id).delete()
+
+        try db.transaction {
+            try db.run(deleteUser)
+            try db.run(deletePushTokens)
+            try db.run(deleteAuthTokens)
+        }
+    }
+
     func authenticate(token: String) throws -> Token {
         guard var token = try db.first(Token.self, Token.content == token) else {
             throw UserError.notFound(token)
@@ -353,6 +368,11 @@ extension UserController {
                     context: context
                 )
                 try self.updateLocation(location, forUserID: auth.user.id)
+                return Response(status: .ok)
+            }
+            .delete("users") { request, context in
+                let auth = try context.requireIdentity()
+                try self.deleteUser(auth.user)
                 return Response(status: .ok)
             }
     }

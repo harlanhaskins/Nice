@@ -11,22 +11,6 @@ import NiceTypes
 import FoundationNetworking
 #endif
 
-struct Forecast: DTO {
-    var temperature: Double
-    var feelsLike: Double
-    var currentTime: Date
-
-    var isNice: Bool {
-        Int(temperature) == 69 || Int(feelsLike) == 69
-    }
-
-    enum CodingKeys: String, CodingKey {
-        case temperature = "temp"
-        case feelsLike = "feels_like"
-        case currentTime = "dt"
-    }
-}
-
 struct WeatherAPI {
     enum WeatherError: Error {
         case apiFailure(String)
@@ -51,6 +35,7 @@ struct WeatherAPI {
         ]
         struct Response: Codable {
             var current: Forecast
+            var timezone: String
         }
         let (data, response) = try await URLSession.shared.data(from: components.url!)
         guard let httpResponse = response as? HTTPURLResponse, (200..<300).contains(httpResponse.statusCode) else {

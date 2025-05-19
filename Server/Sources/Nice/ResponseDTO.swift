@@ -14,4 +14,4 @@ protocol ResponseDTO: DTO, ResponseCodable {}
 extension CreateUserRequest: ResponseDTO {}
 extension Authentication: ResponseDTO {}
 extension Location: ResponseDTO {}
-extension Niceness: ResponseDTO {}
+extension Forecast: ResponseDTO {}
