@@ -89,16 +89,18 @@ final class WeatherController: Sendable {
             return
         }
 
+        var sendNotification = false
+
         if let lastTemperature = entry.lastTemperature, let lastNotificationDate = entry.lastNotificationDate {
             let timeSinceLastNotification = Date.now.timeIntervalSince(lastNotificationDate)
             let hasSentWithinLastHour = timeSinceLastNotification < (60 * 60)
             if lastTemperature == 69 && hasSentWithinLastHour {
                 logger.info("Skipping redundant notification for user '\(user.username)'; it's been continually nice out")
-                return
+                sendNotification = false
             }
         }
 
-        var sendNotification = false
+        // Update the entry in the database to mark that we looked it up
 
         do {
             var entry = entry
