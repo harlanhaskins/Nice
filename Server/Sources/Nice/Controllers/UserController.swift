@@ -209,17 +209,20 @@ final class UserController: Sendable {
     }
 
     func deleteUser(_ user: User) throws {
-        // Delete the user record, all authorization tokens, and all push tokens
-        // for this user.
+        // Delete the user record, all authorization tokens, all locations,
+        // and all push tokens for this user.
 
-        let deleteUser = User.find(User.id == user.id).delete()
-        let deletePushTokens = PushToken.find(PushToken.userID == user.id).delete()
-        let deleteAuthTokens = Token.find(Token.userID == user.id).delete()
+        let deletions = [
+            User.find(User.id == user.id).delete(),
+            PushToken.find(PushToken.userID == user.id).delete(),
+            Token.find(Token.userID == user.id).delete(),
+            UserLocation.find(UserLocation.userID == user.id).delete()
+        ]
 
         try db.transaction {
-            try db.run(deleteUser)
-            try db.run(deletePushTokens)
-            try db.run(deleteAuthTokens)
+            for deletion in deletions {
+                try db.run(deletion)
+            }
         }
     }
 
@@ -307,6 +310,15 @@ extension UserController {
                         user: UserDTO(id: token.userID, username: authenticateUser.username),
                         token: TokenDTO(userID: token.userID, token: token.content, expires: token.expires)
                     )
+                } catch let error as UserError {
+                    switch error {
+                    case .incorrectPassword(let name):
+                        throw HTTPError(.unauthorized, message: "Incorrect password for user '\(name)'")
+                    case .notFound(let user):
+                        throw HTTPError(.unauthorized, message: "Unknown user '\(user)'")
+                    default:
+                        throw error
+                    }
                 }
             }
             .post("users") { request, context in

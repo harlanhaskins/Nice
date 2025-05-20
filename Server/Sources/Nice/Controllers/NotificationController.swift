@@ -50,6 +50,7 @@ extension Notifier {
 }
 
 struct APNSNotifier: Notifier {
+    let logger = Logger(label: "APNSNotifier")
     let client: APNSClient<JSONDecoder, JSONEncoder>
     init(secrets: Secrets.APNS) throws {
         let privateKey = try P256.Signing.PrivateKey(pemRepresentation: secrets.privateKey)
@@ -70,6 +71,7 @@ struct APNSNotifier: Notifier {
     }
 
     func sendNotification(deviceToken: String) async throws {
+        logger.info("Sending notification to device token '\(deviceToken)'")
         try await client.sendAlertNotification(
             .init(
                 alert: .init(title: .raw("Nice")),
