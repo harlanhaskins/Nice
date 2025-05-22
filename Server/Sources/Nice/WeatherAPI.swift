@@ -33,14 +33,26 @@ struct WeatherAPI: Sendable {
             URLQueryItem(name: "appid", value: key),
             URLQueryItem(name: "exclude", value: "minutely,hourly,daily,alerts")
         ]
+        struct ForecastResponse: Codable {
+            var temp: Double
+            var feels_like: Double
+            var dt: Date
+            var sunset: Date
+            var sunrise: Date
+            var clouds: Int
+
+            var dto: Forecast {
+                Forecast(temperature: temp, feelsLike: feels_like, currentTime: dt, sunset: sunset, sunrise: sunrise, clouds: clouds)
+            }
+        }
         struct Response: Codable {
-            var current: Forecast
+            var current: ForecastResponse
             var timezone: String
         }
         let (data, response) = try await URLSession.shared.data(from: components.url!)
         guard let httpResponse = response as? HTTPURLResponse, (200..<300).contains(httpResponse.statusCode) else {
             throw WeatherError.apiFailure(String(decoding: data, as: UTF8.self))
         }
-        return try Self.decoder.decode(Response.self, from: data).current
+        return try Self.decoder.decode(Response.self, from: data).current.dto
     }
 }

@@ -22,10 +22,8 @@ struct MainView: View {
     var body: some View {
         VStack {
             if let forecast {
-                Text(forecast.isNice ? "😎" : "😐")
-                    .font(.system(size: 120))
+                WeatherPreview(forecast: forecast)
             }
-            Text("Welcome, \(auth.user.username)")
 
             if controller.notificationService.state == .indeterminate {
                 Button {
@@ -56,6 +54,16 @@ struct MainView: View {
 }
 
 struct ActionButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) var isEnabled
+
+    var background: AnyShapeStyle {
+        if isEnabled {
+            AnyShapeStyle(.tint)
+        } else {
+            AnyShapeStyle(.secondary)
+        }
+    }
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .frame(maxWidth: .infinity)
@@ -63,7 +71,8 @@ struct ActionButtonStyle: ButtonStyle {
             .font(.subheadline.bold())
             .padding(.horizontal, 12)
             .padding(.vertical, 12)
-            .background(.blue, in: .capsule)
+            .opacity(isEnabled ? 1 : 0.75)
+            .background(background, in: .capsule)
             .scaleEffect(configuration.isPressed ? 0.95 : 1)
             .opacity(configuration.isPressed ? 0.8 : 1)
             .animation(.snappy(duration: 0.2), value: configuration.isPressed)
@@ -71,5 +80,14 @@ struct ActionButtonStyle: ButtonStyle {
 }
 
 #Preview {
-    MainView(auth: Authentication(user: UserDTO(id: 1, username: "harlan"), token: TokenDTO(userID: 1, token: "", expires: .now)))
+    MainView(
+        auth: Authentication(
+            user: UserDTO(
+                id: 1,
+                username: "harlan",
+                location: Location(latitude: 40, longitude: -73)
+            ),
+            token: TokenDTO(userID: 1, token: "", expires: .now)
+        )
+    )
 }

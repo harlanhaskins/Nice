@@ -7,6 +7,7 @@
 
 import Foundation
 import NiceTypes
+import os.log
 import UserNotifications
 import UIKit
 
@@ -15,7 +16,9 @@ import UIKit
 final class NotificationService: NSObject {
     let client: HTTPClient
     let notificationCenter = UNUserNotificationCenter.current()
+    let logger = Logger(for: NotificationService.self)
     var state: AuthorizationState = .indeterminate
+    var hasPushedToken = false
 
     init(client: HTTPClient) {
         self.client = client
@@ -41,6 +44,7 @@ final class NotificationService: NSObject {
         @unknown default:
             state = .denied
         }
+        registerIfAllowed()
     }
 
     @objc func didReceiveNotificationUpdate() {
@@ -53,17 +57,26 @@ final class NotificationService: NSObject {
         guard let deviceToken = UserDefaults.standard.string(forKey: UserDefaultsKey.deviceToken.rawValue) else {
             return
         }
+        guard !hasPushedToken else {
+            return
+        }
+        hasPushedToken = true
+
         try await client.put(
             "notifications",
             body: PushTokenDTO(token: deviceToken, deviceType: .iOS)
         )
+        logger.log("Updated push notification token: \(deviceToken)")
+    }
+
+    func registerIfAllowed() {
+        guard state == .allowed else {
+            return
+        }
+        UIApplication.shared.registerForRemoteNotifications()
     }
 
     func registerForNotifications() {
-        if state == .allowed {
-            UIApplication.shared.registerForRemoteNotifications()
-            return
-        }
         Task {
             do {
                 if try await notificationCenter.requestAuthorization(options: [.alert]) {

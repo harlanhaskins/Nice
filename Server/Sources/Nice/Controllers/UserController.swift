@@ -23,10 +23,6 @@ struct User: Model, Codable {
     var username: String
     var passwordHash: String
     var salt: String
-
-    var dto: UserDTO {
-        UserDTO(id: id, username: username)
-    }
 }
 
 extension User {
@@ -55,8 +51,11 @@ struct Token: Model, Codable {
 }
 
 extension Authentication {
-    init(user: User, token: Token) {
-        self.init(user: user.dto, token: token.dto)
+    init(user: User, token: Token, location: Location?) {
+        self.init(
+            user: UserDTO(id: user.id, username: user.username, location: location),
+            token: token.dto
+        )
     }
 }
 
@@ -244,6 +243,7 @@ final class UserController: Sendable {
     }
 
     func authenticate(username: String, password: String) throws -> Token {
+        let username = cleanUsername(username)
         guard let user = try db.first(User.self, User.username == username) else {
             throw UserError.notFound(username)
         }
@@ -255,11 +255,16 @@ final class UserController: Sendable {
         return try refreshOrCreateToken(userID: user.id)
     }
 
+    func cleanUsername(_ username: String) -> String {
+        username.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    }
+
     func create(
         username: String,
         password: String,
         location: Location? = nil
     ) throws -> (User, Token) {
+        let username = cleanUsername(username)
         guard password.count >= 8 else {
             throw UserError.passwordNotLongEnough
         }
@@ -281,6 +286,15 @@ final class UserController: Sendable {
                 User.salt <- salt)
 
             id = try db.run(insertion)
+
+            if let location {
+                let insertion = UserLocation.table.insert(
+                    UserLocation.userID <- id,
+                    UserLocation.latitude <- location.latitude,
+                    UserLocation.longitude <- location.longitude
+                )
+                _ = try db.run(insertion)
+            }
         }
 
         let newUser = User(
@@ -294,7 +308,7 @@ final class UserController: Sendable {
 }
 
 extension UserController {
-    func addUnauthenticatedRoutes(to router: some RouterMethods) {
+    func addUnauthenticatedRoutes(to router: some RouterMethods, weather: WeatherController) {
         router
             .post("auth") { request, context in
                 let authenticateUser = try await request.decode(
@@ -306,8 +320,13 @@ extension UserController {
                         username: authenticateUser.username,
                         password: authenticateUser.password
                     )
+                    let location = weather.location(forUserID: token.userID)?.location
                     return Authentication(
-                        user: UserDTO(id: token.userID, username: authenticateUser.username),
+                        user: UserDTO(
+                            id: token.userID,
+                            username: authenticateUser.username,
+                            location: location
+                        ),
                         token: TokenDTO(userID: token.userID, token: token.content, expires: token.expires)
                     )
                 } catch let error as UserError {
@@ -332,18 +351,19 @@ extension UserController {
                         password: createUser.password,
                         location: createUser.location
                     )
-                    return Authentication(user: user, token: token)
+                    return Authentication(user: user, token: token, location: nil)
                 } catch let error as UserController.UserError {
                     throw HTTPError(.unauthorized, message: error.message)
                 }
             }
     }
 
-    func addRoutes(to router: some RouterMethods<AuthenticatedRequestContext>) {
+    func addRoutes(to router: some RouterMethods<AuthenticatedRequestContext>, weather: WeatherController) {
         router
             .put("auth") { request, context in
                 let auth = try context.requireIdentity()
-                return Authentication(user: auth.user, token: auth.token)
+                let location = weather.location(forUserID: auth.user.id)?.location
+                return Authentication(user: auth.user, token: auth.token, location: location)
             }
             .delete("users") { request, context in
                 let auth = try context.requireIdentity()

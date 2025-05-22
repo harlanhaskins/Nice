@@ -30,7 +30,12 @@ struct Nice {
         let notifications = try NotificationController(db: connection, users: users, notifier: APNSNotifier(secrets: secrets.apns))
         try notifications.createTables()
 
-        let weather = WeatherController(db: connection, users: users, notifications: notifications, weatherProvider: WeatherAPI(key: secrets.weather.apiKey))
+        let weather = WeatherController(
+            db: connection,
+            users: users,
+            notifications: notifications,
+            weatherProvider: WeatherAPI(key: secrets.weather.apiKey)
+        )
         try weather.createTables()
 
         let router = Router(context: AuthenticatedRequestContext.self)
@@ -42,12 +47,14 @@ struct Nice {
                 allowHeaders: [.accept, .authorization, .contentType, .origin],
                 allowMethods: [.get, .options]
             )
+
+            FileMiddleware(urlBasePath: ".well-known")
         }
 
-        users.addUnauthenticatedRoutes(to: router)
+        users.addUnauthenticatedRoutes(to: router, weather: weather)
 
         let authGroup = router.group().add(middleware: Authenticator(userController: users))
-        users.addRoutes(to: authGroup)
+        users.addRoutes(to: authGroup, weather: weather)
         notifications.addRoutes(to: authGroup)
         weather.addRoutes(to: authGroup)
 

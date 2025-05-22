@@ -20,10 +20,14 @@ final class LocationService: NSObject {
 
     init(client: HTTPClient) {
         self.client = client
+        super.init()
+        checkForLocationState()
     }
 
-    func registerForSignificantLocationChanges() {
-        locationManager.startMonitoringSignificantLocationChanges()
+    func requestLocationUpdates() {
+        checkForLocationState()
+        if state == .allowed { return }
+        locationManager.requestWhenInUseAuthorization()
     }
 
     func checkForLocationState() {
@@ -31,7 +35,6 @@ final class LocationService: NSObject {
         case .authorizedAlways, .authorizedWhenInUse:
             logger.log("Location updates authorized; not re-requesting")
             state = .allowed
-            return
         case .notDetermined:
             state = .indeterminate
         case .denied, .restricted:
@@ -49,13 +52,6 @@ final class LocationService: NSObject {
             logger.error("Failed to update location: \(error)")
         }
     }
-
-    func requestLocationUpdates() {
-        checkForLocationState()
-        if state == .allowed { return }
-        locationManager.requestWhenInUseAuthorization()
-        locationManager.requestAlwaysAuthorization()
-    }
 }
 
 extension LocationService: CLLocationManagerDelegate {
@@ -66,8 +62,14 @@ extension LocationService: CLLocationManagerDelegate {
         guard let loc = locations.max(by: { $0.timestamp < $1.timestamp }) else {
             return
         }
-        Task {
+        Task { @MainActor in
             await self.updateLocation(loc)
+        }
+    }
+
+    nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        Task { @MainActor in
+            checkForLocationState()
         }
     }
 }

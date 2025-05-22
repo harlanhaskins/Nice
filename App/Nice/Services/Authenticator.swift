@@ -63,4 +63,12 @@ final class Authenticator {
         self.authState = .authenticated(auth)
         UserDefaults.standard.apiToken = auth.token.token
     }
+
+    func signUp(username: String, password: String) async throws {
+        let request = CreateUserRequest(username: username, password: password, location: nil)
+        let auth: Authentication = try await client.post("users", body: request)
+        logger.log("Authentication successful; token: \(auth.token.token)")
+        self.authState = .authenticated(auth)
+        UserDefaults.standard.apiToken = auth.token.token
+    }
 }

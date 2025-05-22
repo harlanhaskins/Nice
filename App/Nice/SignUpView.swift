@@ -1,36 +1,36 @@
 //
-//  SignInView.swift
+//  SignUpView.swift
 //  Nice
 //
-//  Created by Harlan Haskins on 5/4/25.
+//  Created by Harlan Haskins on 5/21/25.
 //
 
 import SwiftUI
 
-struct SignInView: View {
+struct SignUpView: View {
     var authenticator: Authenticator
 
     @State private var username: String = ""
     @State private var password: String = ""
+    @State private var confirmPassword: String = ""
 
     var body: some View {
         VStack {
             TextField("Username", text: $username)
                 .autocorrectionDisabled()
             SecureField("Password", text: $password)
-            Button("Sign in", action: signIn)
+            SecureField("Confirm password", text: $confirmPassword)
+
+            Button("Create account", action: signUp)
                 .buttonStyle(ActionButtonStyle())
                 .tint(.blue)
-            Button("Create account", action: signIn)
-                .buttonStyle(ActionButtonStyle())
-                .tint(.secondary)
         }
         .textFieldStyle(.roundedBorder)
         .frame(maxWidth: 320)
         .padding()
     }
 
-    func signIn() {
+    func signUp() {
         Task {
             do {
                 try await authenticator.signIn(

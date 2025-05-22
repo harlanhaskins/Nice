@@ -36,15 +36,6 @@ public struct Forecast: DTO {
         self.sunrise = sunrise
         self.clouds = clouds
     }
-
-    public enum CodingKeys: String, CodingKey {
-        case temperature = "temp"
-        case feelsLike = "feels_like"
-        case currentTime = "dt"
-        case sunset
-        case sunrise
-        case clouds
-    }
 }
 
 public struct CreateUserRequest: DTO {
@@ -76,10 +67,12 @@ public struct AuthenticateRequest: DTO {
 public struct UserDTO: DTO {
     public var id: Int64
     public var username: String
+    public var location: Location?
 
-    public init(id: Int64, username: String) {
+    public init(id: Int64, username: String, location: Location?) {
         self.id = id
         self.username = username
+        self.location = location
     }
 }
 
