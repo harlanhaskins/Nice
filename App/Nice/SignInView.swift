@@ -21,11 +21,15 @@ struct SignInView: View {
             Button("Sign in", action: signIn)
                 .buttonStyle(ActionButtonStyle())
                 .tint(.blue)
+        }
+        .disabled(authenticator.authState == .signingIn)
+        .textFieldStyle(.roundedBorder)
+        .frame(maxHeight: .infinity)
+        .safeAreaInset(edge: .bottom) {
             Button("Create account", action: signIn)
                 .buttonStyle(ActionButtonStyle())
-                .tint(.secondary)
+                .tint(.blue)
         }
-        .textFieldStyle(.roundedBorder)
         .frame(maxWidth: 320)
         .padding()
     }

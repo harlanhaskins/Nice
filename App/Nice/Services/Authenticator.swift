@@ -23,9 +23,10 @@ extension UserDefaults {
 @MainActor
 @Observable
 final class Authenticator {
-    enum AuthenticationState {
+    enum AuthenticationState: Equatable {
         case unauthenticated
         case pendingRefresh(String)
+        case signingIn
         case authenticated(Authentication)
     }
 
@@ -57,18 +58,30 @@ final class Authenticator {
     }
 
     func signIn(username: String, password: String) async throws {
+        self.authState = .signingIn
         let request = AuthenticateRequest(username: username, password: password)
-        let auth: Authentication = try await client.post("auth", body: request)
-        logger.log("Authentication successful; token: \(auth.token.token)")
-        self.authState = .authenticated(auth)
-        UserDefaults.standard.apiToken = auth.token.token
+        do {
+            let auth: Authentication = try await client.post("auth", body: request)
+            logger.log("Authentication successful; token: \(auth.token.token)")
+            self.authState = .authenticated(auth)
+            UserDefaults.standard.apiToken = auth.token.token
+        } catch {
+            self.authState = .unauthenticated
+            throw error
+        }
     }
 
     func signUp(username: String, password: String) async throws {
-        let request = CreateUserRequest(username: username, password: password, location: nil)
-        let auth: Authentication = try await client.post("users", body: request)
-        logger.log("Authentication successful; token: \(auth.token.token)")
-        self.authState = .authenticated(auth)
-        UserDefaults.standard.apiToken = auth.token.token
+        self.authState = .signingIn
+        do {
+            let request = CreateUserRequest(username: username, password: password, location: nil)
+            let auth: Authentication = try await client.post("users", body: request)
+            logger.log("Authentication successful; token: \(auth.token.token)")
+            self.authState = .authenticated(auth)
+            UserDefaults.standard.apiToken = auth.token.token
+        } catch {
+            self.authState = .unauthenticated
+            throw error
+        }
     }
 }

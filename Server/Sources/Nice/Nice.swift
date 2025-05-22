@@ -3,6 +3,7 @@ import Hummingbird
 import HummingbirdAuth
 import NiceTypes
 import SQLite
+import Logging
 
 struct Secrets: Codable {
     struct Weather: Codable {
@@ -39,17 +40,15 @@ struct Nice {
         try weather.createTables()
 
         let router = Router(context: AuthenticatedRequestContext.self)
-        router.addMiddleware {
-            LogRequestsMiddleware(.trace)
+            .addMiddleware {
+                RequestLoggerMiddleware()
 
-            CORSMiddleware(
-                allowOrigin: .originBased,
-                allowHeaders: [.accept, .authorization, .contentType, .origin],
-                allowMethods: [.get, .options]
-            )
-
-            FileMiddleware(urlBasePath: ".well-known")
-        }
+                CORSMiddleware(
+                    allowOrigin: .originBased,
+                    allowHeaders: [.accept, .authorization, .contentType, .origin],
+                    allowMethods: [.get, .options]
+                )
+            }
 
         users.addUnauthenticatedRoutes(to: router, weather: weather)
 

@@ -13,7 +13,7 @@ struct ContentView: View {
     var body: some View {
         ZStack {
             switch authenticator.authState {
-            case .unauthenticated:
+            case .unauthenticated, .signingIn:
                 SignInView(authenticator: authenticator)
             case .pendingRefresh:
                 ProgressView()
