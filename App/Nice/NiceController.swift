@@ -23,16 +23,22 @@ final class NiceController: NSObject, UNUserNotificationCenterDelegate {
     let locationService: LocationService
     let notificationService: NotificationService
     let logger = Logger(for: NiceController.self)
+    let authenticator: Authenticator
     var notificationState = AuthorizationState.indeterminate
 
-    init(authentication: Authentication) {
+    init(authentication: Authentication, authenticator: Authenticator) {
         client = HTTPClient(baseURL: HTTPClient.baseURL, authentication: authentication)
         locationService = LocationService(client: client)
         notificationService = NotificationService(client: client)
+        self.authenticator = authenticator
         super.init()
     }
 
     func loadForecast() async throws -> Forecast {
         try await client.get("forecast")
+    }
+
+    func signOut() async throws {
+        try await authenticator.signOut(pushToken: UserDefaults.standard.pushToken)
     }
 }

@@ -19,6 +19,7 @@ final class NotificationService: NSObject {
     let logger = Logger(for: NotificationService.self)
     var state: AuthorizationState = .indeterminate
     var hasPushedToken = false
+    var pushToken: String? = nil
 
     init(client: HTTPClient) {
         self.client = client
@@ -54,7 +55,7 @@ final class NotificationService: NSObject {
     }
 
     func performNotificationRegistration() async throws {
-        guard let deviceToken = UserDefaults.standard.string(forKey: UserDefaultsKey.deviceToken.rawValue) else {
+        guard let deviceToken = UserDefaults.standard.pushToken else {
             return
         }
         guard !hasPushedToken else {

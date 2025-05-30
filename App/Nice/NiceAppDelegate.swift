@@ -15,17 +15,13 @@ enum NotificationConstants {
     static let deviceTokenKey = "deviceToken"
 }
 
-enum UserDefaultsKey: String {
-    case deviceToken
-}
-
 class AppDelegate: NSObject, UIApplicationDelegate, ObservableObject {
     func application(
         _ application: UIApplication,
         didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
     ) {
         let tokenString = deviceToken.map { String(format: "%02.2hhx", $0) }.joined()
-        UserDefaults.standard.set(tokenString, forKey: UserDefaultsKey.deviceToken.rawValue)
+        UserDefaults.standard.pushToken = tokenString
         NotificationCenter.default.post(
             name: .didReceiveRemoteNotificationToken,
             object: nil,

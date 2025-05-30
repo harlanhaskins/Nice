@@ -255,6 +255,22 @@ final class UserController: Sendable {
         return try refreshOrCreateToken(userID: user.id)
     }
 
+    func revokeAuthentication(auth: ServerAuthentication, pushToken: String?) throws {
+        try db.transaction {
+            let token = Token.find(Token.content == auth.token.content)
+            try db.run(token.delete())
+            logger.info("Deleted push token for '\(auth.user.username)'")
+
+            if let pushToken {
+                let notification = PushToken.find(PushToken.token == pushToken)
+                try db.run(notification.delete())
+                logger.info("Deleted notification token for '\(auth.user.username)'")
+            } else {
+                logger.info("Not deleting notification token for '\(auth.user.username)'; no token provided")
+            }
+        }
+    }
+
     func cleanUsername(_ username: String) -> String {
         username.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
     }
@@ -364,6 +380,16 @@ extension UserController {
                 let auth = try context.requireIdentity()
                 let location = weather.location(forUserID: auth.user.id)?.location
                 return Authentication(user: auth.user, token: auth.token, location: location)
+            }
+            .delete("auth") { request, context in
+                let auth = try context.requireIdentity()
+                do {
+                    let token = request.uri.queryParameters["pushToken"]
+                    try self.revokeAuthentication(auth: auth, pushToken: token.map(String.init))
+                    return Response(status: .ok)
+                } catch {
+                    throw HTTPError(.badRequest)
+                }
             }
             .delete("users") { request, context in
                 let auth = try context.requireIdentity()

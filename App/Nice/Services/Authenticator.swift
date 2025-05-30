@@ -10,16 +10,6 @@ import NiceTypes
 import Observation
 import os
 
-extension UserDefaults {
-    var apiToken: String? {
-        get {
-            string(forKey: "APIToken")
-        } set {
-            set(newValue, forKey: "APIToken")
-        }
-    }
-}
-
 @MainActor
 @Observable
 final class Authenticator {
@@ -43,17 +33,22 @@ final class Authenticator {
         }
     }
 
+    func setAuthentication(_ auth: Authentication?) async {
+        UserDefaults.standard.apiToken = auth?.token.token
+        await client.updateAuthentication(auth)
+    }
+
     func refreshAuth(_ token: String) async throws {
         do {
             let auth: Authentication = try await client.put("auth", headers: [
                 "Authorization": "Bearer \(token)"
             ])
             self.authState = .authenticated(auth)
+            await setAuthentication(auth)
             logger.log("Token refresh successful; token: \(auth.token.token)")
-            UserDefaults.standard.apiToken = token
         } catch {
             authState = .unauthenticated
-            UserDefaults.standard.apiToken = nil
+            await setAuthentication(nil)
         }
     }
 
@@ -64,9 +59,10 @@ final class Authenticator {
             let auth: Authentication = try await client.post("auth", body: request)
             logger.log("Authentication successful; token: \(auth.token.token)")
             self.authState = .authenticated(auth)
-            UserDefaults.standard.apiToken = auth.token.token
+            await setAuthentication(auth)
         } catch {
             self.authState = .unauthenticated
+            await setAuthentication(nil)
             throw error
         }
     }
@@ -78,10 +74,21 @@ final class Authenticator {
             let auth: Authentication = try await client.post("users", body: request)
             logger.log("Authentication successful; token: \(auth.token.token)")
             self.authState = .authenticated(auth)
-            UserDefaults.standard.apiToken = auth.token.token
+            await setAuthentication(auth)
         } catch {
             self.authState = .unauthenticated
+            await setAuthentication(nil)
             throw error
         }
+    }
+
+    func signOut(pushToken: String?) async throws {
+        var query = [URLQueryItem]()
+        if let pushToken {
+            query.append(URLQueryItem(name: "pushToken", value: pushToken))
+        }
+        try await client.delete("auth", query: query)
+        self.authState = .unauthenticated
+        await setAuthentication(nil)
     }
 }

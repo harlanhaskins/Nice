@@ -18,7 +18,7 @@ struct ContentView: View {
             case .pendingRefresh:
                 ProgressView()
             case .authenticated(let auth):
-                MainView(auth: auth)
+                MainView(auth: auth, authenticator: authenticator)
             }
         }
     }

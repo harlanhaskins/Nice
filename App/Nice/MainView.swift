@@ -13,16 +13,34 @@ struct MainView: View {
     @State var controller: NiceController
     @State var forecast: Forecast?
     var auth: Authentication
+    @State var isSettingsOpen: Bool = false
 
-    init(auth: Authentication) {
+    init(auth: Authentication, authenticator: Authenticator) {
         self.auth = auth
-        self._controller = State(initialValue: NiceController(authentication: auth))
+        self._controller = State(
+            initialValue: NiceController(
+                authentication: auth,
+                authenticator: authenticator
+            )
+        )
     }
 
     var body: some View {
-        VStack {
-            if let forecast {
-                WeatherPreview(forecast: forecast)
+        NavigationStack {
+            ZStack {
+                if let forecast {
+                    WeatherPreview(forecast: forecast)
+                } else {
+                    ProgressView()
+                }
+            }
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Settings", systemImage: "gear") {
+                        isSettingsOpen = true
+                    }
+                    .labelStyle(.iconOnly)
+                }
             }
 
             if controller.notificationService.state == .indeterminate {
@@ -49,33 +67,37 @@ struct MainView: View {
                 print("\(error)")
             }
         }
+        .sheet(isPresented: $isSettingsOpen) {
+            SettingsView(controller: controller)
+                .padding()
+                .presentationDetents([.height(160)])
+        }
         .frame(maxWidth: 320)
     }
 }
 
-struct ActionButtonStyle: ButtonStyle {
-    @Environment(\.isEnabled) var isEnabled
+struct SettingsView: View {
+    @Environment(\.dismiss) var dismiss
+    var controller: NiceController
 
-    var background: AnyShapeStyle {
-        if isEnabled {
-            AnyShapeStyle(.tint)
-        } else {
-            AnyShapeStyle(.secondary)
+    var body: some View {
+        VStack {
+            Button("Sign out") {
+                Task {
+                    do {
+                        try await controller.signOut()
+                        dismiss()
+                    } catch {
+                        print("Failed to sign out: \(error)")
+                    }
+                }
+            }
+            Button("Delete account", role: .destructive) {
+            }
+            .tint(.red)
         }
-    }
-
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .frame(maxWidth: .infinity)
-            .foregroundStyle(.white)
-            .font(.subheadline.bold())
-            .padding(.horizontal, 12)
-            .padding(.vertical, 12)
-            .opacity(isEnabled ? 1 : 0.75)
-            .background(background, in: .capsule)
-            .scaleEffect(configuration.isPressed ? 0.95 : 1)
-            .opacity(configuration.isPressed ? 0.8 : 1)
-            .animation(.snappy(duration: 0.2), value: configuration.isPressed)
+        .buttonStyle(ActionButtonStyle())
+        .tint(.blue)
     }
 }
 
@@ -88,6 +110,7 @@ struct ActionButtonStyle: ButtonStyle {
                 location: Location(latitude: 40, longitude: -73)
             ),
             token: TokenDTO(userID: 1, token: "", expires: .now)
-        )
+        ),
+        authenticator: Authenticator()
     )
 }

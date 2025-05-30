@@ -26,11 +26,15 @@ actor HTTPClient {
 
     let urlSession: URLSession
     let baseURL: URL
-    let authentication: Authentication?
+    var authentication: Authentication?
 
     init(baseURL: URL, authentication: Authentication?, urlSession: URLSession = .shared) {
         self.baseURL = baseURL
         self.urlSession = urlSession
+        self.authentication = authentication
+    }
+
+    func updateAuthentication(_ authentication: Authentication?) {
         self.authentication = authentication
     }
 
@@ -123,12 +127,38 @@ actor HTTPClient {
         try await performRequest(request)
     }
 
+    func send(
+        _ method: HTTPMethod,
+        path: String,
+        query: [URLQueryItem],
+        headers: [String: String]
+    ) async throws {
+        let request = makeRequest(method, path: path, query: query, headers: headers)
+        try await performRequest(request)
+    }
+
     func get<Result: Decodable>(
         _ path: String,
         query: [URLQueryItem] = [],
         headers: [String: String] = [:]
     ) async throws -> Result {
         try await send(.get, path: path, query: query, headers: headers)
+    }
+
+    func delete<Result: Decodable>(
+        _ path: String,
+        query: [URLQueryItem] = [],
+        headers: [String: String] = [:]
+    ) async throws -> Result {
+        try await send(.delete, path: path, query: query, headers: headers)
+    }
+
+    func delete(
+        _ path: String,
+        query: [URLQueryItem] = [],
+        headers: [String: String] = [:]
+    ) async throws {
+        try await send(.delete, path: path, query: query, headers: headers)
     }
 
     func post<Body: Encodable, Result: Decodable>(
