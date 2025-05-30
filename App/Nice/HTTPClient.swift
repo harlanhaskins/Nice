@@ -9,6 +9,18 @@ import Foundation
 import NiceTypes
 import os
 
+struct APIError: Codable, LocalizedError {
+    var message: String
+
+    var errorDescription: String? {
+        message
+    }
+}
+
+private struct APIErrorResponse: Codable {
+    var error: APIError
+}
+
 actor HTTPClient {
     let logger = Logger(for: HTTPClient.self)
 
@@ -66,6 +78,16 @@ actor HTTPClient {
         return request
     }
 
+    func extractError(_ httpResponse: HTTPURLResponse, data: Data) -> Error {
+        let errorMessage = String(decoding: data, as: UTF8.self)
+        logger.error("Received \(httpResponse.statusCode) error from server at '\(httpResponse.url!.path)': \(errorMessage)")
+        do {
+            return try decoder.decode(APIErrorResponse.self, from: data).error
+        } catch {
+            return URLError(.badServerResponse)
+        }
+    }
+
     func performRequest<Result: Decodable>(_ request: URLRequest) async throws -> Result {
         let (data, response) = try await urlSession.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse else {
@@ -73,9 +95,7 @@ actor HTTPClient {
         }
 
         guard (200..<300).contains(httpResponse.statusCode) else {
-            let errorMessage = String(decoding: data, as: UTF8.self)
-            logger.error("Received \(httpResponse.statusCode) error from server at '\(request.url!.path)': \(errorMessage)")
-            throw URLError(.badServerResponse)
+            throw extractError(httpResponse, data: data)
         }
         return try decoder.decode(Result.self, from: data)
     }
@@ -87,9 +107,7 @@ actor HTTPClient {
         }
 
         guard (200..<300).contains(httpResponse.statusCode) else {
-            let errorMessage = String(decoding: data, as: UTF8.self)
-            logger.error("Received \(httpResponse.statusCode) error from server at '\(request.url!.path)': \(errorMessage)")
-            throw URLError(.badServerResponse)
+            throw extractError(httpResponse, data: data)
         }
     }
 

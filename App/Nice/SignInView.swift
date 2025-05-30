@@ -18,6 +18,7 @@ struct SignInView: View {
     @State private var password: String = ""
     @State private var passwordConfirmation: String = ""
     @State private var authType: AuthenticationType = .signIn
+    @Environment(\.presentToast) var presentToast
 
     var body: some View {
         VStack {
@@ -60,7 +61,7 @@ struct SignInView: View {
 
     func signUp() {
         guard password == passwordConfirmation else {
-            print("Passwords do not match")
+            presentToast(.error("Passwords do not match"))
             return
         }
 
@@ -71,7 +72,7 @@ struct SignInView: View {
                     password: password
                 )
             } catch {
-                print(error)
+                presentToast(.error("Could not sign up: \(error.localizedDescription)"))
             }
         }
     }
@@ -84,7 +85,7 @@ struct SignInView: View {
                     password: password
                 )
             } catch {
-                print(error)
+                presentToast(.error("Could not sign in: \(error.localizedDescription)"))
             }
         }
     }

@@ -41,4 +41,8 @@ final class NiceController: NSObject, UNUserNotificationCenterDelegate {
     func signOut() async throws {
         try await authenticator.signOut(pushToken: UserDefaults.standard.pushToken)
     }
+
+    func deleteAccount() async throws {
+        try await authenticator.deleteAccount()
+    }
 }

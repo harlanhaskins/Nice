@@ -14,6 +14,7 @@ struct MainView: View {
     @State var forecast: Forecast?
     var auth: Authentication
     @State var isSettingsOpen: Bool = false
+    @Environment(\.presentToast) var presentToast
 
     init(auth: Authentication, authenticator: Authenticator) {
         self.auth = auth
@@ -64,7 +65,7 @@ struct MainView: View {
             do {
                 forecast = try await controller.loadForecast()
             } catch {
-                print("\(error)")
+                presentToast(.warning("Could not load weather: \(error)"))
             }
         }
         .sheet(isPresented: $isSettingsOpen) {
@@ -79,6 +80,8 @@ struct MainView: View {
 struct SettingsView: View {
     @Environment(\.dismiss) var dismiss
     var controller: NiceController
+    @State var isShowingDeleteConfirmation = false
+    @Environment(\.presentToast) var presentToast
 
     var body: some View {
         VStack {
@@ -88,18 +91,33 @@ struct SettingsView: View {
                         try await controller.signOut()
                         dismiss()
                     } catch {
-                        print("Failed to sign out: \(error)")
+                        presentToast(.error("Failed to sign out: \(error)"))
                     }
                 }
             }
             Button("Delete account", role: .destructive) {
+                isShowingDeleteConfirmation = true
             }
             .tint(.red)
+        }
+        .confirmationDialog("Delete account", isPresented: $isShowingDeleteConfirmation) {
+            Button("Delete", role: .destructive) {
+                Task {
+                    do {
+                        try await controller.signOut()
+                        dismiss()
+                    } catch {
+                        presentToast(.error("Could not delete account: \(error)"))
+                    }
+                }
+            }
         }
         .buttonStyle(ActionButtonStyle())
         .tint(.blue)
     }
 }
+
+
 
 #Preview {
     MainView(

@@ -10,6 +10,7 @@ import SwiftUI
 
 struct ContentView: View {
     @State var authenticator = Authenticator()
+
     var body: some View {
         ZStack {
             switch authenticator.authState {
@@ -21,6 +22,7 @@ struct ContentView: View {
                 MainView(auth: auth, authenticator: authenticator)
             }
         }
+        .modifier(ToasterModifier())
     }
 }
 

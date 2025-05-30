@@ -36,6 +36,11 @@ final class Authenticator {
     func setAuthentication(_ auth: Authentication?) async {
         UserDefaults.standard.apiToken = auth?.token.token
         await client.updateAuthentication(auth)
+        if let auth {
+            authState = .authenticated(auth)
+        } else {
+            authState = .unauthenticated
+        }
     }
 
     func refreshAuth(_ token: String) async throws {
@@ -43,11 +48,9 @@ final class Authenticator {
             let auth: Authentication = try await client.put("auth", headers: [
                 "Authorization": "Bearer \(token)"
             ])
-            self.authState = .authenticated(auth)
             await setAuthentication(auth)
             logger.log("Token refresh successful; token: \(auth.token.token)")
         } catch {
-            authState = .unauthenticated
             await setAuthentication(nil)
         }
     }
@@ -58,10 +61,8 @@ final class Authenticator {
         do {
             let auth: Authentication = try await client.post("auth", body: request)
             logger.log("Authentication successful; token: \(auth.token.token)")
-            self.authState = .authenticated(auth)
             await setAuthentication(auth)
         } catch {
-            self.authState = .unauthenticated
             await setAuthentication(nil)
             throw error
         }
@@ -73,10 +74,8 @@ final class Authenticator {
             let request = CreateUserRequest(username: username, password: password, location: nil)
             let auth: Authentication = try await client.post("users", body: request)
             logger.log("Authentication successful; token: \(auth.token.token)")
-            self.authState = .authenticated(auth)
             await setAuthentication(auth)
         } catch {
-            self.authState = .unauthenticated
             await setAuthentication(nil)
             throw error
         }
@@ -88,7 +87,11 @@ final class Authenticator {
             query.append(URLQueryItem(name: "pushToken", value: pushToken))
         }
         try await client.delete("auth", query: query)
-        self.authState = .unauthenticated
+        await setAuthentication(nil)
+    }
+
+    func deleteAccount() async throws {
+        try await client.delete("users")
         await setAuthentication(nil)
     }
 }

@@ -53,16 +53,6 @@
 			path = Nice;
 			sourceTree = "<group>";
 		};
-		DC6B20C92DC7ECCA008C4FB7 /* NiceTests */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = NiceTests;
-			sourceTree = "<group>";
-		};
-		DC6B20D32DC7ECCA008C4FB7 /* NiceUITests */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = NiceUITests;
-			sourceTree = "<group>";
-		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -95,8 +85,6 @@
 			isa = PBXGroup;
 			children = (
 				DC6B20BB2DC7ECC8008C4FB7 /* Nice */,
-				DC6B20C92DC7ECCA008C4FB7 /* NiceTests */,
-				DC6B20D32DC7ECCA008C4FB7 /* NiceUITests */,
 				DC6B20BA2DC7ECC8008C4FB7 /* Products */,
 				DC6B20EF2DC7ECDD008C4FB7 /* Server */,
 			);
@@ -151,9 +139,6 @@
 			dependencies = (
 				DC6B20C82DC7ECCA008C4FB7 /* PBXTargetDependency */,
 			);
-			fileSystemSynchronizedGroups = (
-				DC6B20C92DC7ECCA008C4FB7 /* NiceTests */,
-			);
 			name = NiceTests;
 			packageProductDependencies = (
 			);
@@ -173,9 +158,6 @@
 			);
 			dependencies = (
 				DC6B20D22DC7ECCA008C4FB7 /* PBXTargetDependency */,
-			);
-			fileSystemSynchronizedGroups = (
-				DC6B20D32DC7ECCA008C4FB7 /* NiceUITests */,
 			);
 			name = NiceUITests;
 			packageProductDependencies = (
