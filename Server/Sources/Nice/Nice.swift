@@ -47,9 +47,18 @@ struct Nice {
         )
         try weather.createTables()
 
+        let filePath = URL(filePath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appending(path: "Web")
+
         let router = Router(context: AuthenticatedRequestContext.self)
             .addMiddleware {
                 RequestLoggerMiddleware()
+
+                FileMiddleware(filePath.path, searchForIndexHtml: true)
 
                 CORSMiddleware(
                     allowOrigin: .originBased,
@@ -58,10 +67,12 @@ struct Nice {
                 )
             }
 
-        users.addUnauthenticatedRoutes(to: router, weather: weather)
-        notifications.addPublicRoutes(to: router)
+        let apiGroup = router.group("api")
 
-        let authGroup = router.group().add(middleware: Authenticator(userController: users))
+        users.addUnauthenticatedRoutes(to: apiGroup, weather: weather)
+        notifications.addPublicRoutes(to: apiGroup)
+
+        let authGroup = apiGroup.add(middleware: Authenticator(userController: users))
         users.addRoutes(to: authGroup, weather: weather)
         notifications.addRoutes(to: authGroup)
         weather.addRoutes(to: authGroup)

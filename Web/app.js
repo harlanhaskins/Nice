@@ -1,6 +1,6 @@
 class NiceWeatherApp {
     constructor() {
-        this.baseURL = 'http://localhost:8080';
+        this.baseURL = 'api';
         this.auth = null;
         this.isSignUp = false;
         this.locationPermission = 'default';
