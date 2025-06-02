@@ -10,37 +10,38 @@ import NiceTypes
 import SwiftUI
 
 struct MainView: View {
-    @State var controller: NiceController
-    @State var forecast: Forecast?
-    var auth: Authentication
-    @State var isSettingsOpen: Bool = false
+    enum WeatherUpdateState: Equatable {
+        case noLocation
+        case loading
+        case forecast(Forecast, Location)
+    }
+    var controller: NiceController
+    @State var weatherState: WeatherUpdateState = .noLocation
+    @Binding var isSettingsOpen: Bool
     @Environment(\.presentToast) var presentToast
+    @Environment(\.scenePhase) var scenePhase
 
-    init(auth: Authentication, authenticator: Authenticator) {
-        self.auth = auth
-        self._controller = State(
-            initialValue: NiceController(
-                authentication: auth,
-                authenticator: authenticator
-            )
-        )
+    init(
+        controller: NiceController,
+        isSettingsOpen: Binding<Bool>
+    ) {
+        self.controller = controller
+        self._isSettingsOpen = isSettingsOpen
+        if controller.locationService.location != nil {
+            weatherState = .loading
+        }
     }
 
     var body: some View {
-        NavigationStack {
+        VStack {
             ZStack {
-                if let forecast {
-                    WeatherPreview(forecast: forecast)
-                } else {
+                switch weatherState {
+                case .noLocation:
+                    Text("No location set. Nice needs location services to fetch your weather.")
+                case .loading:
                     ProgressView()
-                }
-            }
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Settings", systemImage: "gear") {
-                        isSettingsOpen = true
-                    }
-                    .labelStyle(.iconOnly)
+                case .forecast(let forecast, let location):
+                    WeatherPreview(location: location, forecast: forecast)
                 }
             }
 
@@ -61,17 +62,24 @@ struct MainView: View {
             }
         }
         .buttonStyle(ActionButtonStyle())
-        .task {
+        .task(id: scenePhase) {
+            guard let location = controller.locationService.location else { return }
             do {
-                forecast = try await controller.loadForecast()
+                await controller.locationService.updateLocation()
+                let forecast = try await controller.loadForecast()
+                weatherState = .forecast(forecast, location)
             } catch {
                 presentToast(.warning("Could not load weather: \(error)"))
             }
         }
-        .sheet(isPresented: $isSettingsOpen) {
-            SettingsView(controller: controller)
-                .padding()
-                .presentationDetents([.height(160)])
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button("Settings", systemImage: "gear") {
+                    isSettingsOpen = true
+                }
+                .labelStyle(.iconOnly)
+                .buttonStyle(.plain)
+            }
         }
         .frame(maxWidth: 320)
     }
@@ -79,56 +87,59 @@ struct MainView: View {
 
 struct SettingsView: View {
     @Environment(\.dismiss) var dismiss
-    var controller: NiceController
+    var authenticator: Authenticator
     @State var isShowingDeleteConfirmation = false
+    @State var isDeletingAccount: Bool = false
     @Environment(\.presentToast) var presentToast
 
     var body: some View {
         VStack {
-            Button("Sign out") {
-                Task {
-                    do {
-                        try await controller.signOut()
-                        dismiss()
-                    } catch {
-                        presentToast(.error("Failed to sign out: \(error)"))
-                    }
+            AsyncButton("Sign out") {
+                do {
+                    try await authenticator.signOut()
+                    dismiss()
+                } catch {
+                    presentToast(.error("Failed to sign out: \(error)"))
                 }
             }
-            Button("Delete account", role: .destructive) {
+
+            Button {
                 isShowingDeleteConfirmation = true
+            } label: {
+                HStack {
+                    if isDeletingAccount {
+                        ProgressView()
+                            .tint(nil)
+                            .transition(.blurReplace)
+                    }
+                    Text("Delete account")
+                }
             }
+            .disabled(isDeletingAccount)
+            .animation(.snappy, value: isDeletingAccount)
             .tint(.red)
         }
-        .confirmationDialog("Delete account", isPresented: $isShowingDeleteConfirmation) {
+        .confirmationDialog(
+            "Delete account?",
+            isPresented: $isShowingDeleteConfirmation,
+            titleVisibility: .visible
+        ) {
             Button("Delete", role: .destructive) {
                 Task {
+                    isDeletingAccount = true
+                    defer { isDeletingAccount = false }
                     do {
-                        try await controller.signOut()
+                        try await authenticator.deleteAccount()
                         dismiss()
                     } catch {
                         presentToast(.error("Could not delete account: \(error)"))
                     }
                 }
             }
+        } message: {
+            Text("This will permanently delete all information associated with your account and sign you out. This cannot be undone, but you may create a new account.")
         }
         .buttonStyle(ActionButtonStyle())
         .tint(.blue)
     }
-}
-
-
-
-#Preview {
-    MainView(
-        auth: Authentication(
-            user: UserDTO(
-                id: 1,
-                username: "harlan",
-                location: Location(latitude: 40, longitude: -73)
-            ),
-            token: TokenDTO(userID: 1, token: "", expires: .now)
-        ),
-        authenticator: Authenticator()
-    )
 }

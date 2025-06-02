@@ -20,16 +20,23 @@ final class Authenticator {
         case authenticated(Authentication)
     }
 
-    let client = HTTPClient(baseURL: HTTPClient.baseURL, authentication: nil, urlSession: .shared)
+    let client: HTTPClient
     let logger = Logger(for: Authenticator.self)
     var authState: AuthenticationState = .unauthenticated
 
-    init() {
+    init(client: HTTPClient) {
+        self.client = client
         if let token = UserDefaults.standard.apiToken {
             authState = .pendingRefresh(token)
             Task {
                 try await refreshAuth(token)
             }
+        }
+    }
+
+    func reset() {
+        Task {
+            await setAuthentication(nil)
         }
     }
 
@@ -55,35 +62,37 @@ final class Authenticator {
         }
     }
 
-    func signIn(username: String, password: String) async throws {
+    func signIn(username: String, password: String) async throws -> Authentication {
         self.authState = .signingIn
         let request = AuthenticateRequest(username: username, password: password)
         do {
             let auth: Authentication = try await client.post("auth", body: request)
             logger.log("Authentication successful; token: \(auth.token.token)")
             await setAuthentication(auth)
+            return auth
         } catch {
             await setAuthentication(nil)
             throw error
         }
     }
 
-    func signUp(username: String, password: String) async throws {
+    func signUp(username: String, password: String, location: Location?) async throws -> Authentication {
         self.authState = .signingIn
         do {
-            let request = CreateUserRequest(username: username, password: password, location: nil)
+            let request = CreateUserRequest(username: username, password: password, location: location)
             let auth: Authentication = try await client.post("users", body: request)
             logger.log("Authentication successful; token: \(auth.token.token)")
             await setAuthentication(auth)
+            return auth
         } catch {
             await setAuthentication(nil)
             throw error
         }
     }
 
-    func signOut(pushToken: String?) async throws {
+    func signOut() async throws {
         var query = [URLQueryItem]()
-        if let pushToken {
+        if let pushToken = UserDefaults.standard.pushToken {
             query.append(URLQueryItem(name: "pushToken", value: pushToken))
         }
         try await client.delete("auth", query: query)

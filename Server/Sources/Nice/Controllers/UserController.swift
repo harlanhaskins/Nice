@@ -211,17 +211,24 @@ final class UserController: Sendable {
         // Delete the user record, all authorization tokens, all locations,
         // and all push tokens for this user.
 
-        let deletions = [
-            User.find(User.id == user.id).delete(),
-            PushToken.find(PushToken.userID == user.id).delete(),
-            Token.find(Token.userID == user.id).delete(),
-            UserLocation.find(UserLocation.userID == user.id).delete()
+        let deletions: [(Model.Type, Delete)] = [
+            (User.self, User.find(User.id == user.id).delete()),
+            (PushToken.self, PushToken.find(PushToken.userID == user.id).delete()),
+            (Token.self, Token.find(Token.userID == user.id).delete()),
+            (UserLocation.self, UserLocation.find(UserLocation.userID == user.id).delete())
         ]
 
-        try db.transaction {
-            for deletion in deletions {
-                try db.run(deletion)
+        do {
+            try db.transaction {
+                for (type, deletion) in deletions {
+                    logger.info("Deleting \(type.tableName) entries for '\(user.username)'")
+                    try db.run(deletion)
+                }
             }
+            logger.info("Successfully deleted user '\(user.username)'")
+        } catch {
+            logger.info("Failed to delete user '\(user.username)': \(error)")
+            throw error
         }
     }
 

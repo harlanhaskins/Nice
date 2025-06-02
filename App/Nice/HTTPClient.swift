@@ -50,6 +50,10 @@ actor HTTPClient {
         self.authentication = authentication
     }
 
+    func reset() {
+        self.authentication = nil
+    }
+
     enum HTTPMethod: String {
         case get, put, delete, post, head, options
 

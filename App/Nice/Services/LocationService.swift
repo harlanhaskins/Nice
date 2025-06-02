@@ -17,20 +17,27 @@ final class LocationService: NSObject {
     let locationManager = CLLocationManager()
     let logger = Logger(for: LocationService.self)
     var state: AuthorizationState = .indeterminate
+    var location: Location?
 
     init(client: HTTPClient) {
         self.client = client
         super.init()
-        checkForLocationState()
+        checkForAuthorization()
+    }
+
+    func setInitialLocation(_ location: Location?) {
+        if self.location == nil {
+            self.location = location
+        }
     }
 
     func requestLocationUpdates() {
-        checkForLocationState()
+        checkForAuthorization()
         if state == .allowed { return }
         locationManager.requestWhenInUseAuthorization()
     }
 
-    func checkForLocationState() {
+    func checkForAuthorization() {
         switch locationManager.authorizationStatus {
         case .authorizedAlways, .authorizedWhenInUse:
             logger.log("Location updates authorized; not re-requesting")
@@ -44,10 +51,10 @@ final class LocationService: NSObject {
         }
     }
 
-    func updateLocation(_ location: CLLocation) async {
-        let loc = Location(latitude: location.coordinate.latitude, longitude: location.coordinate.longitude)
+    func updateLocation() async {
+        guard let location else { return }
         do {
-            try await client.put("location", body: loc)
+            try await client.put("location", body: location)
         } catch {
             logger.error("Failed to update location: \(error)")
         }
@@ -63,13 +70,17 @@ extension LocationService: CLLocationManagerDelegate {
             return
         }
         Task { @MainActor in
-            await self.updateLocation(loc)
+            self.location = Location(
+                latitude: loc.coordinate.latitude,
+                longitude: loc.coordinate.longitude
+            )
+            await self.updateLocation()
         }
     }
 
     nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         Task { @MainActor in
-            checkForLocationState()
+            checkForAuthorization()
         }
     }
 }

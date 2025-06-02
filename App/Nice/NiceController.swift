@@ -16,33 +16,51 @@ import UIKit
 
 @MainActor
 @Observable
-final class NiceController: NSObject, UNUserNotificationCenterDelegate {
+final class NiceController {
+    let logger = Logger(for: NiceController.self)
+    
     let client: HTTPClient
-    let locationManager = CLLocationManager()
-    let notificationCenter = UNUserNotificationCenter.current()
+    let authenticator: Authenticator
     let locationService: LocationService
     let notificationService: NotificationService
-    let logger = Logger(for: NiceController.self)
-    let authenticator: Authenticator
-    var notificationState = AuthorizationState.indeterminate
 
-    init(authentication: Authentication, authenticator: Authenticator) {
-        client = HTTPClient(baseURL: HTTPClient.baseURL, authentication: authentication)
+    init() {
+        client = HTTPClient(baseURL: HTTPClient.productionURL, authentication: nil, urlSession: .shared)
+        authenticator = Authenticator(client: client)
         locationService = LocationService(client: client)
         notificationService = NotificationService(client: client)
-        self.authenticator = authenticator
-        super.init()
+    }
+
+    func onAuthenticate(_ auth: Authentication) async {
+        if let location = auth.user.location {
+            locationService.setInitialLocation(location)
+        } else if locationService.location != nil {
+            await locationService.updateLocation()
+        }
+    }
+
+    func signIn(username: String, password: String) async throws -> Authentication {
+        let auth = try await authenticator.signIn(username: username, password: password)
+        await onAuthenticate(auth)
+        return auth
+    }
+
+    func signUp(username: String, password: String) async throws -> Authentication {
+        let auth = try await authenticator.signUp(
+            username: username,
+            password: password,
+            location: locationService.location
+        )
+        await onAuthenticate(auth)
+        return auth
+    }
+
+    func signOut() async throws {
+        try await authenticator.signOut()
+        await client.reset()
     }
 
     func loadForecast() async throws -> Forecast {
         try await client.get("forecast")
-    }
-
-    func signOut() async throws {
-        try await authenticator.signOut(pushToken: UserDefaults.standard.pushToken)
-    }
-
-    func deleteAccount() async throws {
-        try await authenticator.deleteAccount()
     }
 }

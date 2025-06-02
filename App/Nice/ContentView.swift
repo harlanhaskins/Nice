@@ -9,18 +9,30 @@ import NiceTypes
 import SwiftUI
 
 struct ContentView: View {
-    @State var authenticator = Authenticator()
+    @State var controller: NiceController
+    @State var isSettingsOpen: Bool = false
+
+    init() {
+        self._controller = State(initialValue: NiceController())
+    }
 
     var body: some View {
-        ZStack {
-            switch authenticator.authState {
+        NavigationStack {
+            switch controller.authenticator.authState {
             case .unauthenticated, .signingIn:
-                SignInView(authenticator: authenticator)
+                SignInView(controller: controller)
+                    .transition(.scale(scale: 0.95).combined(with: .opacity).animation(.snappy))
             case .pendingRefresh:
                 ProgressView()
-            case .authenticated(let auth):
-                MainView(auth: auth, authenticator: authenticator)
+            case .authenticated:
+                MainView(controller: controller, isSettingsOpen: $isSettingsOpen)
+                    .transition(.scale(scale: 0.95).combined(with: .opacity).animation(.snappy))
             }
+        }
+        .sheet(isPresented: $isSettingsOpen) {
+            SettingsView(authenticator: controller.authenticator)
+                .padding()
+                .presentationDetents([.height(160)])
         }
         .modifier(ToasterModifier())
     }
