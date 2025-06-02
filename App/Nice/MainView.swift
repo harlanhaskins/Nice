@@ -63,14 +63,30 @@ struct MainView: View {
         }
         .buttonStyle(ActionButtonStyle())
         .task(id: scenePhase) {
-            guard let location = controller.locationService.location else { return }
-            do {
-                await controller.locationService.updateLocation()
-                let forecast = try await controller.loadForecast()
-                weatherState = .forecast(forecast, location)
-            } catch {
-                presentToast(.warning("Could not load weather: \(error)"))
+            await fetchWeather()
+
+            switch scenePhase {
+            case .active:
+                controller.locationService.didBecomeActive()
+            case .background, .inactive:
+                controller.locationService.didBecomeInactive()
+            @unknown default:
+                break
             }
+        }
+        .task(id: controller.locationService.location) {
+            await fetchWeather()
+        }
+        .task {
+            do {
+                try await controller.notificationService.performNotificationRegistration()
+                controller.locationService.didBecomeActive()
+            } catch {
+
+            }
+
+            await controller.locationService.updateLocation()
+            await fetchWeather()
         }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -82,6 +98,17 @@ struct MainView: View {
             }
         }
         .frame(maxWidth: 320)
+    }
+
+    func fetchWeather() async {
+        do {
+            guard let location = controller.locationService.location else { return }
+            await controller.locationService.updateLocation()
+            let forecast = try await controller.loadForecast()
+            weatherState = .forecast(forecast, Location(location.coordinate))
+        } catch {
+            presentToast(.warning("Could not load weather: \(error)"))
+        }
     }
 }
 

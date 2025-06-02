@@ -85,7 +85,7 @@ final class NotificationController: Sendable {
             PushToken.self,
             PushToken.token == dto.token &&
             PushToken.type == dto.deviceType.rawValue &&
-            PushToken.userID == Int64(user.id)
+            PushToken.userID == user.id
         )
         if matchingTokens > 0 {
             return
@@ -93,7 +93,7 @@ final class NotificationController: Sendable {
         let newToken = PushToken.table.insert(
             PushToken.token <- dto.token,
             PushToken.type <- dto.deviceType.rawValue,
-            PushToken.userID <- Int64(user.id)
+            PushToken.userID <- user.id
         )
         try db.run(newToken)
     }

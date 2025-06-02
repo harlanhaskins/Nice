@@ -27,15 +27,16 @@ struct WeatherPreview: View {
                 .font(.system(size: 80))
             Text("\(Text("feels like").foregroundStyle(.secondary)) \(Int(forecast.feelsLike))º")
                 .font(.caption)
-                .offset(y: -20)
+                .offset(y: -10)
         }
     }
 
     var sunIndicators: some View {
-        VStack {
+        HStack {
             Text("\(Image(systemName: "sunrise.fill"))\(forecast.sunrise, format: .dateTime.hour().minute())")
             Text("\(Image(systemName: "sunset.fill"))\(forecast.sunset, format: .dateTime.hour().minute())")
         }
+        .font(.caption)
         .foregroundStyle(.secondary)
     }
 
@@ -65,7 +66,7 @@ struct WeatherPreview: View {
         GroupBox {
             HStack {
                 temperature
-                HStack(spacing: 10) {
+                VStack(spacing: 10) {
                     clouds
                     sunIndicators
                 }

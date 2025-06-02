@@ -49,7 +49,7 @@ final class NiceController {
         let auth = try await authenticator.signUp(
             username: username,
             password: password,
-            location: locationService.location
+            location: (locationService.location?.coordinate).map { Location($0) }
         )
         await onAuthenticate(auth)
         return auth

@@ -29,6 +29,7 @@ class NiceWeatherApp {
         document.getElementById('notification-btn').addEventListener('click', () => this.requestNotifications());
         document.getElementById('refresh-weather').addEventListener('click', () => this.loadWeather());
         document.getElementById('test-notifications').addEventListener('click', () => this.registerPushNotifications());
+        document.getElementById('send-test-notification').addEventListener('click', () => this.sendTestNotification());
         document.getElementById('sign-out').addEventListener('click', () => this.signOut());
     }
 
@@ -342,6 +343,35 @@ class NiceWeatherApp {
         return outputArray;
     }
 
+    async sendTestNotification() {
+        if (!this.auth) {
+            this.showError('Please sign in to send test notifications');
+            return;
+        }
+
+        if (this.notificationPermission !== 'granted') {
+            this.showError('Please enable notifications first');
+            return;
+        }
+
+        try {
+            const response = await fetch(`${this.baseURL}/notifications/test`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${this.auth.token.token}`,
+                },
+            });
+
+            if (!response.ok) {
+                throw new Error(`Failed to send test notification: ${response.status}`);
+            }
+
+            this.showSuccess('Test notification sent!');
+        } catch (error) {
+            console.error('Test notification error:', error);
+            this.showError(error.message || 'Failed to send test notification');
+        }
+    }
 
     async loadWeather() {
         if (!this.auth) return;

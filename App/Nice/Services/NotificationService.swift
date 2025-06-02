@@ -55,18 +55,18 @@ final class NotificationService: NSObject {
     }
 
     func performNotificationRegistration() async throws {
-        guard let deviceToken = UserDefaults.standard.pushToken else {
+        guard await client.authentication != nil, let deviceToken = UserDefaults.standard.pushToken else {
             return
         }
         guard !hasPushedToken else {
             return
         }
-        hasPushedToken = true
 
         try await client.put(
             "notifications",
             body: PushTokenDTO(token: deviceToken, deviceType: .iOS)
         )
+        hasPushedToken = true
         logger.log("Updated push notification token: \(deviceToken)")
     }
 

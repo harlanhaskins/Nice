@@ -17,17 +17,18 @@ final class LocationService: NSObject {
     let locationManager = CLLocationManager()
     let logger = Logger(for: LocationService.self)
     var state: AuthorizationState = .indeterminate
-    var location: Location?
+    var location: CLLocation?
 
     init(client: HTTPClient) {
         self.client = client
         super.init()
+        locationManager.delegate = self
         checkForAuthorization()
     }
 
     func setInitialLocation(_ location: Location?) {
-        if self.location == nil {
-            self.location = location
+        if self.location == nil, let location {
+            self.location = CLLocation(latitude: location.latitude, longitude: location.longitude)
         }
     }
 
@@ -35,6 +36,15 @@ final class LocationService: NSObject {
         checkForAuthorization()
         if state == .allowed { return }
         locationManager.requestWhenInUseAuthorization()
+    }
+
+    func didBecomeActive() {
+        guard state == .allowed else { return }
+        locationManager.startUpdatingLocation()
+    }
+
+    func didBecomeInactive() {
+        locationManager.stopUpdatingLocation()
     }
 
     func checkForAuthorization() {
@@ -54,7 +64,8 @@ final class LocationService: NSObject {
     func updateLocation() async {
         guard let location else { return }
         do {
-            try await client.put("location", body: location)
+            let loc = Location(location.coordinate)
+            try await client.put("location", body: loc)
         } catch {
             logger.error("Failed to update location: \(error)")
         }
@@ -70,18 +81,34 @@ extension LocationService: CLLocationManagerDelegate {
             return
         }
         Task { @MainActor in
-            self.location = Location(
-                latitude: loc.coordinate.latitude,
-                longitude: loc.coordinate.longitude
-            )
-            await self.updateLocation()
+            let prev = self.location
+            self.location = loc
+
+            if prev == nil || prev!.distance(from: loc) > 100 {
+                await self.updateLocation()
+            } else {
+                logger.info("Not updating location; within 100 meters")
+            }
         }
     }
 
     nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         Task { @MainActor in
             checkForAuthorization()
+            didBecomeActive()
         }
+    }
+}
+
+extension CLLocationCoordinate2D {
+    init(_ location: Location) {
+        self.init(latitude: location.latitude, longitude: location.longitude)
+    }
+}
+
+extension Location {
+    init(_ location: CLLocationCoordinate2D) {
+        self.init(latitude: location.latitude, longitude: location.longitude)
     }
 }
 
