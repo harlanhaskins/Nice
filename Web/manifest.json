@@ -1,0 +1,24 @@
+{
+  "name": "Nice Weather",
+  "short_name": "Nice Weather",
+  "description": "Get notified when it's nice out (69°F)",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#667eea",
+  "theme_color": "#2196F3",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icon-512.png", 
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ],
+  "categories": ["weather", "lifestyle"],
+  "lang": "en-US"
+}
