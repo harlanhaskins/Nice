@@ -9,6 +9,10 @@ import Foundation
 import Logging
 import NiceTypes
 
+#if os(Linux)
+import FoundationNetworking
+#endif
+
 #if canImport(CryptoKit)
 import CryptoKit
 #else
