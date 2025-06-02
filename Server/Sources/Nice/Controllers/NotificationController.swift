@@ -1,5 +1,5 @@
 //
-//  File.swift
+//  NotificationController.swift
 //  Nice
 //
 //  Created by Harlan Haskins on 5/18/25.
@@ -7,18 +7,11 @@
 
 import APNSCore
 import APNS
-import NIOPosix
 import Foundation
 import Logging
 @preconcurrency import SQLite
 import Hummingbird
 import NiceTypes
-
-#if canImport(CryptoKit)
-import CryptoKit
-#else
-import Crypto
-#endif
 
 struct PushToken: Model {
     static let id = Expression<Int64>("id")
@@ -39,74 +32,38 @@ struct PushToken: Model {
     }
 }
 
-protocol Notifier: Sendable {
-    func sendNotification(deviceToken: String) async throws
-    func shutdown() async throws
-}
-
-extension Notifier {
-    func shutdown() {
-    }
-}
-
-struct APNSNotifier: Notifier {
-    let logger = Logger(label: "APNSNotifier")
-    let client: APNSClient<JSONDecoder, JSONEncoder>
-    init(secrets: Secrets.APNS) throws {
-        let privateKey = try P256.Signing.PrivateKey(pemRepresentation: secrets.privateKey)
-
-        self.client = APNSClient(
-            configuration: .init(
-                authenticationMethod: .jwt(
-                    privateKey: privateKey,
-                    keyIdentifier: secrets.keyID,
-                    teamIdentifier: secrets.teamID
-                ),
-                environment: .development
-            ),
-            eventLoopGroupProvider: .shared(MultiThreadedEventLoopGroup.singleton),
-            responseDecoder: JSONDecoder(),
-            requestEncoder: JSONEncoder()
-        )
-    }
-
-    func sendNotification(deviceToken: String) async throws {
-        logger.info("Sending notification to device token '\(deviceToken)'")
-        try await client.sendAlertNotification(
-            .init(
-                alert: .init(title: .raw("Nice")),
-                expiration: .none,
-                priority: .immediately,
-                topic: "com.harlanhaskins.Nice",
-                payload: [String: String]()
-            ),
-            deviceToken: deviceToken
-        )
-    }
-
-    func shutdown() async throws {
-        try await client.shutdown()
-    }
-}
 
 final class NotificationController: Sendable {
     enum NotificationError: Error {
         case couldNotFindPrivateKey
+        case unsupportedDeviceType
     }
     let db: Connection
     let users: UserController
-    let notifier: Notifier
+    let apnsNotifier: APNSNotifier
+    let webPushNotifier: WebPushNotifier
     let logger = Logger(label: "NotificationController")
 
-    init(db: Connection, users: UserController, notifier: some Notifier) {
+    init(db: Connection, users: UserController, apnsNotifier: APNSNotifier, webPushNotifier: WebPushNotifier) {
         self.db = db
         self.users = users
-        self.notifier = notifier
+        self.apnsNotifier = apnsNotifier
+        self.webPushNotifier = webPushNotifier
     }
 
     deinit {
-        Task { [notifier] in
-            try await notifier.shutdown()
+        Task { [apnsNotifier, webPushNotifier] in
+            try await apnsNotifier.shutdown()
+            try await webPushNotifier.shutdown()
+        }
+    }
+    
+    private func notifier(for deviceType: DeviceType) -> Notifier {
+        switch deviceType {
+        case .iOS:
+            return apnsNotifier
+        case .web:
+            return webPushNotifier
         }
     }
 
@@ -146,12 +103,27 @@ final class NotificationController: Sendable {
 
         let tokens = try db.find(PushToken.self, PushToken.userID == userID)
         for token in tokens {
+            guard let deviceType = DeviceType(rawValue: token.type) else {
+                logger.error("Unknown device type: \(token.type)")
+                continue
+            }
+            
+            let selectedNotifier = notifier(for: deviceType)
+            
             do {
-                try await notifier.sendNotification(deviceToken: token.token)
+                try await selectedNotifier.sendNotification(deviceToken: token.token)
             } catch let error as APNSError {
                 logger.error("\(error)")
                 if error.reason == .badDeviceToken {
                     badTokenIDs.append(token.id)
+                }
+            } catch let error as WebPushError {
+                logger.error("\(error)")
+                switch error {
+                case .httpError(410), .httpError(404):
+                    badTokenIDs.append(token.id)
+                default:
+                    break
                 }
             } catch {
                 logger.error("\(error)")
@@ -163,6 +135,15 @@ final class NotificationController: Sendable {
         }
     }
 
+    func addPublicRoutes(to router: some RouterMethods<AuthenticatedRequestContext>) {
+        router
+            .get("notifications/vapid-public-key") { request, context in
+                let publicKeyData = try self.webPushNotifier.applicationServerKey
+                let base64Key = publicKeyData.base64EncodedString()
+                return ["publicKey": base64Key]
+            }
+    }
+    
     func addRoutes(to router: some RouterMethods<AuthenticatedRequestContext>) {
         router
             .put("notifications") { request, context in

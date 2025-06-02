@@ -100,6 +100,7 @@ public struct Authentication: DTO {
 
 public enum DeviceType: String, DTO {
     case iOS
+    case web
 }
 
 public struct PushTokenDTO: DTO {

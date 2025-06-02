@@ -55,7 +55,7 @@ self.addEventListener('fetch', event => {
           console.log('Service Worker: Serving from cache', event.request.url);
           return response;
         }
-        
+
         console.log('Service Worker: Fetching from network', event.request.url);
         return fetch(event.request).then(response => {
           // Check if we received a valid response
@@ -86,9 +86,9 @@ self.addEventListener('fetch', event => {
 // Push event - handle push notifications
 self.addEventListener('push', event => {
   console.log('Service Worker: Push event received', event);
-  
+
   const options = {
-    body: event.data ? event.data.text() : 'It\'s nice out! (69°F)',
+    body: event.data ? event.data.text() : '',
     icon: 'icon-192.png',
     badge: 'icon-192.png',
     vibrate: [200, 100, 200],
@@ -104,14 +104,14 @@ self.addEventListener('push', event => {
   };
 
   event.waitUntil(
-    self.registration.showNotification('🌤️ Nice Weather Alert!', options)
+    self.registration.showNotification('😎 Nice', options)
   );
 });
 
 // Notification click event
 self.addEventListener('notificationclick', event => {
   console.log('Service Worker: Notification clicked', event);
-  
+
   event.notification.close();
 
   if (event.action === 'view' || !event.action) {
@@ -124,7 +124,7 @@ self.addEventListener('notificationclick', event => {
 // Background sync (for future enhancement)
 self.addEventListener('sync', event => {
   console.log('Service Worker: Background sync', event.tag);
-  
+
   if (event.tag === 'weather-sync') {
     event.waitUntil(
       // Could sync weather data in background
@@ -136,7 +136,7 @@ self.addEventListener('sync', event => {
 // Message event - communicate with main app
 self.addEventListener('message', event => {
   console.log('Service Worker: Message received', event.data);
-  
+
   if (event.data && event.data.type === 'SKIP_WAITING') {
     self.skipWaiting();
   }

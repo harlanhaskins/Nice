@@ -14,8 +14,14 @@ struct Secrets: Codable {
         var teamID: String
         var privateKey: String
     }
+    struct VAPID: Codable {
+        var publicKey: String
+        var privateKey: String
+        var contact: String
+    }
     var weather: Weather
     var apns: APNS
+    var vapid: VAPID
 }
 
 @main
@@ -28,7 +34,9 @@ struct Nice {
         let users = UserController(db: connection)
         try users.createTables()
 
-        let notifications = try NotificationController(db: connection, users: users, notifier: APNSNotifier(secrets: secrets.apns))
+        let apnsNotifier = try APNSNotifier(secrets: secrets.apns)
+        let webPushNotifier = try WebPushNotifier(secrets: secrets.vapid)
+        let notifications = NotificationController(db: connection, users: users, apnsNotifier: apnsNotifier, webPushNotifier: webPushNotifier)
         try notifications.createTables()
 
         let weather = WeatherController(
@@ -51,6 +59,7 @@ struct Nice {
             }
 
         users.addUnauthenticatedRoutes(to: router, weather: weather)
+        notifications.addPublicRoutes(to: router)
 
         let authGroup = router.group().add(middleware: Authenticator(userController: users))
         users.addRoutes(to: authGroup, weather: weather)

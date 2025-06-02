@@ -1,6 +1,6 @@
 class NiceWeatherApp {
     constructor() {
-        this.baseURL = 'https://nice.harlanhaskins.com';
+        this.baseURL = 'http://localhost:8080';
         this.auth = null;
         this.isSignUp = false;
         this.locationPermission = 'default';
@@ -28,6 +28,7 @@ class NiceWeatherApp {
         document.getElementById('location-btn').addEventListener('click', () => this.requestLocation());
         document.getElementById('notification-btn').addEventListener('click', () => this.requestNotifications());
         document.getElementById('refresh-weather').addEventListener('click', () => this.loadWeather());
+        document.getElementById('test-notifications').addEventListener('click', () => this.registerPushNotifications());
         document.getElementById('sign-out').addEventListener('click', () => this.signOut());
     }
 
@@ -40,6 +41,14 @@ class NiceWeatherApp {
                 if (new Date(this.auth.token.expires) > new Date()) {
                     this.updateUI();
                     this.loadWeather();
+                    // Register push notifications if permission is already granted
+                    console.log('Loaded stored auth, notification permission:', this.notificationPermission);
+                    if (this.notificationPermission === 'granted') {
+                        console.log('Registering push notifications from stored auth');
+                        this.registerPushNotifications();
+                    } else {
+                        console.log('Notification permission not granted for stored auth, skipping push registration');
+                    }
                 } else {
                     this.clearAuth();
                 }
@@ -54,15 +63,28 @@ class NiceWeatherApp {
 
         const username = document.getElementById('username').value;
         const password = document.getElementById('password').value;
+        const confirmPassword = document.getElementById('confirm-password').value;
 
         if (!username || !password) {
             this.showError('Please fill in all fields');
             return;
         }
 
-        if (this.isSignUp && password.length < 8) {
-            this.showError('Password must be at least 8 characters long');
-            return;
+        if (this.isSignUp) {
+            if (!confirmPassword) {
+                this.showError('Please confirm your password');
+                return;
+            }
+
+            if (password !== confirmPassword) {
+                this.showError('Passwords do not match');
+                return;
+            }
+
+            if (password.length < 8) {
+                this.showError('Password must be at least 8 characters long');
+                return;
+            }
         }
 
         this.setLoading(true);
@@ -96,6 +118,15 @@ class NiceWeatherApp {
             this.updateUI();
             this.loadWeather();
 
+            // Register push notifications if permission is already granted
+            console.log('Sign-in complete, notification permission:', this.notificationPermission);
+            if (this.notificationPermission === 'granted') {
+                console.log('Registering push notifications after sign-in');
+                await this.registerPushNotifications();
+            } else {
+                console.log('Notification permission not granted, skipping push registration');
+            }
+
         } catch (error) {
             console.error('Auth error:', error);
             this.showError(error.message || 'Authentication failed');
@@ -114,15 +145,22 @@ class NiceWeatherApp {
         const button = document.getElementById('auth-button');
         const toggleText = document.getElementById('auth-toggle-text');
         const toggleLink = document.getElementById('auth-toggle');
+        const confirmPasswordGroup = document.getElementById('confirm-password-group');
+        const confirmPasswordInput = document.getElementById('confirm-password');
 
         if (this.isSignUp) {
             button.textContent = 'Sign Up';
             toggleText.textContent = 'Already have an account?';
             toggleLink.textContent = 'Sign In';
+            confirmPasswordGroup.style.display = 'block';
+            confirmPasswordInput.required = true;
         } else {
             button.textContent = 'Sign In';
             toggleText.textContent = "Don't have an account?";
             toggleLink.textContent = 'Sign Up';
+            confirmPasswordGroup.style.display = 'none';
+            confirmPasswordInput.required = false;
+            confirmPasswordInput.value = '';
         }
     }
 
@@ -214,24 +252,79 @@ class NiceWeatherApp {
             return;
         }
 
+        if (!this.auth) {
+            console.log('Not authenticated, skipping push notification registration');
+            return;
+        }
+
         try {
+            // Get the VAPID public key from the server
+            const vapidResponse = await fetch(`${this.baseURL}/notifications/vapid-public-key`);
+            if (!vapidResponse.ok) {
+                throw new Error('Failed to get VAPID public key');
+            }
+
+            const vapidData = await vapidResponse.json();
+            console.log('VAPID response:', vapidData);
+            const publicKey = vapidData.publicKey || vapidData;
+            console.log('Public key:', publicKey);
+            console.log('Public key length (base64):', publicKey.length);
+            const applicationServerKey = this.base64ToUint8Array(publicKey);
+            console.log('Application server key ready, length:', applicationServerKey.length);
+
             const registration = await navigator.serviceWorker.ready;
 
-            // For demo purposes, we'll just register a dummy subscription
-            // In a real app, you'd generate proper VAPID keys and handle this properly
+            // Subscribe to push notifications
             const subscription = await registration.pushManager.subscribe({
                 userVisibleOnly: true,
-                applicationServerKey: this.urlBase64ToUint8Array('BMqSvZiAF8PVkm_r-d7_HezfkBiO5TiKMRDv4KLNZm1yFSaRJ8lqhpQ-qJQFMsQfJlcKqH8_5MQ')
+                applicationServerKey: applicationServerKey
             });
 
-            console.log('Push subscription:', subscription);
+            // Register the subscription with the server
+            console.log('About to send push token to server...');
+            await this.sendPushTokenToServer(subscription);
+
+            console.log('Push subscription registered:', subscription);
             this.showSuccess('Push notifications registered!');
         } catch (error) {
             console.error('Failed to register push notifications:', error);
+            this.showError('Failed to register push notifications');
         }
     }
 
-    urlBase64ToUint8Array(base64String) {
+    async sendPushTokenToServer(subscription) {
+        console.log('sendPushTokenToServer called with subscription:', subscription);
+        if (!this.auth) {
+            console.error("No auth available; not sending notification push update");
+            return;
+        }
+
+        try {
+            const response = await fetch(`${this.baseURL}/notifications`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${this.auth.token.token}`,
+                },
+                body: JSON.stringify({
+                    token: JSON.stringify(subscription),
+                    deviceType: 'web'
+                }),
+            });
+
+            if (!response.ok) {
+                throw new Error(`Failed to register push token: ${response.status}`);
+            }
+
+            console.log('Push token registered with server');
+        } catch (error) {
+            console.error('Failed to send push token to server:', error);
+            throw error;
+        }
+    }
+
+    base64ToUint8Array(base64String) {
+        // Remove any padding and convert to raw bytes
         const padding = '='.repeat((4 - base64String.length % 4) % 4);
         const base64 = (base64String + padding)
             .replace(/-/g, '+')
@@ -243,8 +336,12 @@ class NiceWeatherApp {
         for (let i = 0; i < rawData.length; ++i) {
             outputArray[i] = rawData.charCodeAt(i);
         }
+
+        console.log('Converted key length:', outputArray.length, 'bytes');
+        console.log('Key bytes:', Array.from(outputArray.slice(0, 8)).map(b => b.toString(16).padStart(2, '0')).join(' '), '...');
         return outputArray;
     }
+
 
     async loadWeather() {
         if (!this.auth) return;
@@ -291,10 +388,10 @@ class NiceWeatherApp {
 
         if (forecast.isNice) {
             indicator.className = 'nice-indicator nice';
-            text.textContent = '🎉 It\'s NICE out! (69°F)';
+            text.textContent = '😎';
         } else {
             indicator.className = 'nice-indicator not-nice';
-            text.textContent = 'Not quite nice weather today';
+            text.textContent = '😐';
         }
 
         indicator.classList.remove('hidden');
@@ -359,6 +456,11 @@ class NiceWeatherApp {
     }
 
     requestPermissions() {
+        // Synchronously check notification permission first
+        if ('Notification' in window) {
+            this.notificationPermission = Notification.permission;
+        }
+
         // Check current permission states
         if (navigator.geolocation) {
             navigator.permissions?.query({name: 'geolocation'}).then(result => {
@@ -367,10 +469,7 @@ class NiceWeatherApp {
             });
         }
 
-        if ('Notification' in window) {
-            this.notificationPermission = Notification.permission;
-            this.updatePermissionStatus();
-        }
+        this.updatePermissionStatus();
     }
 
     setLoading(loading) {
