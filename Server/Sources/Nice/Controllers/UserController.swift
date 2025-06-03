@@ -13,15 +13,22 @@ import Hummingbird
 import HummingbirdAuth
 import Logging
 
+/// Database model for user accounts
+/// Stores authentication credentials with secure password hashing
 struct User: Model, Codable {
+    /// Database column expressions for type-safe queries
     static let id = Expression<Int64>("id")
     static let username = Expression<String>("username")
     static let passwordHash = Expression<String>("passwordHash")
     static let salt = Expression<String>("salt")
 
+    /// Unique user identifier (auto-incrementing primary key)
     let id: Int64
+    /// Normalized username (trimmed, lowercased, unique)
     var username: String
+    /// Scrypt-hashed password for secure storage
     var passwordHash: String
+    /// Random salt used for password hashing
     var salt: String
 }
 
@@ -34,17 +41,25 @@ extension User {
     }
 }
 
+/// Database model for authentication tokens
+/// Each user has at most one active token (1:1 relationship)
 struct Token: Model, Codable {
+    /// Database column expressions for type-safe queries
     static let id = Expression<Int64>("id")
     static let userID = Expression<Int64>("userID")
     static let content = Expression<String>("content")
     static let expires = Expression<Int64>("expires")
 
+    /// Unique token identifier
     var id: Int64
+    /// Foreign key to user table (unique constraint)
     var userID: Int64
+    /// Hex-encoded token string (unique)
     var content: String
+    /// Expiration timestamp (14 days from creation/refresh)
     var expires: Date
 
+    /// Convert to DTO for API responses
     var dto: TokenDTO {
         TokenDTO(userID: userID, token: content, expires: expires)
     }
@@ -68,8 +83,12 @@ extension Token {
     }
 }
 
+/// Protocol for date operations (enables testing with mock dates)
+/// Provides current time and token expiration calculation
 protocol DateProviding: Sendable {
+    /// Current date and time
     var now: Date { get }
+    /// New expiration date for tokens (14 days from now)
     var newExpirationDate: Date { get }
 }
 
@@ -87,7 +106,14 @@ struct CalendarDateProvider: DateProviding {
     }
 }
 
+/// Protocol for secure password hashing operations
+/// Uses Scrypt algorithm for resistance against brute-force attacks
 protocol PasswordHashing: Sendable {
+    /// Compute secure hash of password with salt
+    /// - Parameters:
+    ///   - password: Plain text password
+    ///   - salt: Random salt for this user
+    /// - Returns: Hex-encoded hash string
     func computePasswordHash(password: String, salt: String) throws -> String
 }
 
@@ -106,12 +132,20 @@ struct ScryptPasswordHasher: PasswordHashing {
     }
 }
 
+/// Controller for user management operations
+/// Handles authentication, registration, and user lifecycle
 final class UserController: Sendable {
+    /// Domain-specific errors for user operations
     enum UserError: Error, Equatable {
+        /// User not found by username or ID
         case notFound(String)
+        /// Password verification failed
         case incorrectPassword(user: String)
+        /// Authentication token has expired
         case tokenExpired
+        /// Password doesn't meet length requirement (8+ chars)
         case passwordNotLongEnough
+        /// Username already taken during registration
         case userAlreadyExists(String)
 
         var message: String {
@@ -144,6 +178,8 @@ final class UserController: Sendable {
         self.passwordHasher = passwordHasher
     }
 
+    /// Initialize database tables for users and tokens
+    /// Creates tables only if they don't already exist
     func createTables() throws {
         let userColumns = try db.schema.columnDefinitions(table: "user")
         if !userColumns.isEmpty {
@@ -207,6 +243,10 @@ final class UserController: Sendable {
         }
     }
 
+    /// Delete user and all associated data (cascading delete)
+    /// Removes user record, tokens, locations, and push tokens
+    /// - Parameter user: User to delete
+    /// - Throws: Database errors if deletion fails
     func deleteUser(_ user: User) throws {
         // Delete the user record, all authorization tokens, all locations,
         // and all push tokens for this user.
@@ -232,6 +272,10 @@ final class UserController: Sendable {
         }
     }
 
+    /// Authenticate user by token and refresh expiration
+    /// - Parameter token: Hex-encoded authentication token
+    /// - Returns: Valid token with refreshed expiration
+    /// - Throws: UserError if token is invalid or expired
     func authenticate(token: String) throws -> Token {
         guard var token = try db.first(Token.self, Token.content == token) else {
             throw UserError.notFound(token)
@@ -249,6 +293,12 @@ final class UserController: Sendable {
         return token
     }
 
+    /// Authenticate user by credentials and return/create token
+    /// - Parameters:
+    ///   - username: User's username (will be normalized)
+    ///   - password: Plain text password
+    /// - Returns: Authentication token for API access
+    /// - Throws: UserError for invalid credentials
     func authenticate(username: String, password: String) throws -> Token {
         let username = cleanUsername(username)
         guard let user = try db.first(User.self, User.username == username) else {
@@ -281,6 +331,13 @@ final class UserController: Sendable {
         username.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
     }
 
+    /// Create new user account with secure password storage
+    /// - Parameters:
+    ///   - username: Desired username (must be unique)
+    ///   - password: Plain text password (8+ characters)
+    ///   - location: Optional initial location
+    /// - Returns: Tuple of created user and authentication token
+    /// - Throws: UserError for validation failures or conflicts
     func create(
         username: String,
         password: String,
@@ -329,7 +386,10 @@ final class UserController: Sendable {
     }
 }
 
+// MARK: - Route Registration
 extension UserController {
+    /// Register public routes that don't require authentication
+    /// Routes: POST /auth (login), POST /users (registration)
     func addUnauthenticatedRoutes(to router: some RouterMethods, weather: WeatherController) {
         router
             .post("auth") { request, context in
@@ -380,6 +440,8 @@ extension UserController {
             }
     }
 
+    /// Register protected routes requiring authentication
+    /// Routes: PUT /auth (refresh), DELETE /auth (logout), DELETE /users (delete account)
     func addRoutes(to router: some RouterMethods<AuthenticatedRequestContext>, weather: WeatherController) {
         router
             .put("auth") { request, context in

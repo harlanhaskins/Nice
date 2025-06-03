@@ -11,7 +11,10 @@ import Logging
 import NiceTypes
 @preconcurrency import SQLite
 
+/// Database model for user location and notification tracking
+/// Each user has at most one location (1:1 relationship)
 struct UserLocation: Model {
+    /// Database column expressions for type-safe queries
     static let id = Expression<Int64>("id")
     static let userID = Expression<Int64>("userID")
     static let latitude = Expression<Double>("latitude")
@@ -19,10 +22,15 @@ struct UserLocation: Model {
     static let lastTemperature = Expression<Int?>("lastTemperature")
     static let lastNotificationDate = Expression<Int64?>("lastNotificationDate")
 
+    /// Unique location record identifier
     var id: Int64
+    /// Foreign key to user table (unique constraint)
     var userID: Int64
+    /// Geographic coordinates for weather forecasts
     var location: Location
+    /// Last temperature reading (used for notification throttling)
     var lastTemperature: Int?
+    /// Timestamp of last notification sent (prevents spam)
     var lastNotificationDate: Date?
 
     init(_ row: Row) {
@@ -39,12 +47,19 @@ struct UserLocation: Model {
     }
 }
 
+/// Protocol for weather data sources
+/// Abstracts external weather API for testing and flexibility
 protocol WeatherProvider: Sendable {
+    /// Fetch current weather forecast for a location
+    /// - Parameter location: Geographic coordinates
+    /// - Returns: Current weather conditions and forecast
     func forecast(for location: Location) async throws -> Forecast
 }
 
 extension WeatherAPI: WeatherProvider {}
 
+/// Controller for weather operations and notification logic
+/// Manages periodic weather checks and "nice" notifications
 final class WeatherController: Sendable {
     let db: Connection
     let users: UserController
@@ -80,6 +95,11 @@ final class WeatherController: Sendable {
         })
     }
 
+    /// Process weather check for a single user
+    /// Fetches weather, applies notification throttling, and updates state
+    /// - Parameters:
+    ///   - user: User to check weather for
+    ///   - entry: User's location and notification history
     func runWeatherJob(for user: User, entry: UserLocation) async {
         let forecast: Forecast
         do {
@@ -134,6 +154,8 @@ final class WeatherController: Sendable {
         }
     }
 
+    /// Run weather job for all users with locations
+    /// Iterates through all users and checks for "nice" weather conditions
     func runWeatherJob() async {
         let users: [User]
         do {
@@ -158,10 +180,17 @@ final class WeatherController: Sendable {
         logger.info("Ending weather job for \(users.count) users. Elapsed time: \(Int(end - start)) seconds")
     }
 
+    /// Get user's location record from database
+    /// - Parameter userID: User identifier
+    /// - Returns: Location record if exists, nil otherwise
     func location(forUserID userID: Int64) -> UserLocation? {
         try? db.first(UserLocation.self, UserLocation.userID == userID)
     }
 
+    /// Update or create user's location
+    /// - Parameters:
+    ///   - location: New geographic coordinates
+    ///   - userID: User to update location for
     func updateLocation(_ location: Location, forUserID userID: Int64) throws {
         if var entry = self.location(forUserID: userID) {
             entry.location = location
@@ -179,6 +208,8 @@ final class WeatherController: Sendable {
         }
     }
 
+    /// Register weather-related routes (all require authentication)
+    /// Routes: GET /forecast, POST /run (manual job), PUT /location
     func addRoutes(to router: some RouterMethods<AuthenticatedRequestContext>) {
         router
             .get("forecast") { req, context in

@@ -13,17 +13,25 @@ import Logging
 import Hummingbird
 import NiceTypes
 
+/// Database model for push notification tokens
+/// Associates device tokens with users and auth tokens for security
 struct PushToken: Model {
+    /// Database column expressions for type-safe queries
     static let id = Expression<Int64>("id")
     static let userID = Expression<Int64>("userID")
     static let token = Expression<String>("token")
     static let authToken = Expression<String>("authToken")
     static let type = Expression<String>("type")
 
+    /// Unique push token record identifier
     var id: Int64
+    /// Foreign key to user table
     var userID: Int64
+    /// Authentication token this push token is bound to
     var authToken: String
+    /// Device-specific push token (APNS or VAPID)
     var token: String
+    /// Device type string (iOS or web)
     var type: String
 
     init(_ row: Row) {
@@ -36,9 +44,14 @@ struct PushToken: Model {
 }
 
 
+/// Controller for push notification management
+/// Handles registration and delivery across iOS and web platforms
 final class NotificationController: Sendable {
+    /// Errors specific to notification operations
     enum NotificationError: Error {
+        /// APNS private key not found or invalid
         case couldNotFindPrivateKey
+        /// Unknown device type for notification
         case unsupportedDeviceType
     }
     let db: Connection
@@ -84,6 +97,11 @@ final class NotificationController: Sendable {
         })
     }
 
+    /// Register a push notification token for a user
+    /// Prevents duplicate registrations and binds token to auth session
+    /// - Parameters:
+    ///   - dto: Push token registration data
+    ///   - auth: Current user authentication
     func registerPushToken(_ dto: PushTokenDTO, for auth: ServerAuthentication) throws {
         let matchingTokens = try db.count(
             PushToken.self,
@@ -104,6 +122,10 @@ final class NotificationController: Sendable {
         try db.run(newToken)
     }
 
+    /// Send "nice weather" notification to all user's devices
+    /// Handles both iOS (APNS) and web (VAPID) push notifications
+    /// Automatically cleans up invalid tokens
+    /// - Parameter userID: User to send notification to
     func sendNiceNotification(to userID: Int64) async throws {
         var badTokenIDs = [Int64]()
 
@@ -141,6 +163,8 @@ final class NotificationController: Sendable {
         }
     }
 
+    /// Register public notification routes
+    /// Routes: GET /notifications/vapid-public-key (for web push setup)
     func addPublicRoutes(to router: some RouterMethods<AuthenticatedRequestContext>) {
         router
             .get("notifications/vapid-public-key") { request, context in
@@ -150,6 +174,8 @@ final class NotificationController: Sendable {
             }
     }
     
+    /// Register protected notification routes
+    /// Routes: PUT /notifications (register token), POST /notifications/test
     func addRoutes(to router: some RouterMethods<AuthenticatedRequestContext>) {
         router
             .put("notifications") { request, context in

@@ -5,25 +5,42 @@ import NiceTypes
 import SQLite
 import Logging
 
+/// Configuration secrets loaded from JSON file
+/// Contains API keys and certificates for external services
 struct Secrets: Codable {
+    /// Weather API configuration
     struct Weather: Codable {
+        /// API key for weather service provider
         var apiKey: String
     }
+    /// Apple Push Notification Service configuration
     struct APNS: Codable {
+        /// APNS key identifier
         var keyID: String
+        /// Apple Developer Team ID
         var teamID: String
+        /// Private key for APNS authentication
         var privateKey: String
     }
+    /// VAPID configuration for web push notifications
     struct VAPID: Codable {
+        /// Public key for client subscription
         var publicKey: String
+        /// Private key for server signing
         var privateKey: String
+        /// Contact email for push service
         var contact: String
     }
+    /// Weather API secrets
     var weather: Weather
+    /// APNS configuration
     var apns: APNS
+    /// Web push configuration
     var vapid: VAPID
 }
 
+/// Main application entry point
+/// Sets up database, controllers, middleware, and starts the server
 @main
 struct Nice {
     static func main() async throws {
