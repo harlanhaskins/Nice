@@ -91,11 +91,7 @@ final class Authenticator {
     }
 
     func signOut() async throws {
-        var query = [URLQueryItem]()
-        if let pushToken = UserDefaults.standard.pushToken {
-            query.append(URLQueryItem(name: "pushToken", value: pushToken))
-        }
-        try await client.delete("auth", query: query)
+        try await client.delete("auth")
         await setAuthentication(nil)
     }
 

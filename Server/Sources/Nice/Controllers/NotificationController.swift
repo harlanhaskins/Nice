@@ -17,10 +17,12 @@ struct PushToken: Model {
     static let id = Expression<Int64>("id")
     static let userID = Expression<Int64>("userID")
     static let token = Expression<String>("token")
+    static let authToken = Expression<String>("authToken")
     static let type = Expression<String>("type")
 
     var id: Int64
     var userID: Int64
+    var authToken: String
     var token: String
     var type: String
 
@@ -29,6 +31,7 @@ struct PushToken: Model {
         userID = row[Self.userID]
         token = row[Self.token]
         type = row[Self.type]
+        authToken = row[Self.authToken]
     }
 }
 
@@ -76,16 +79,18 @@ final class NotificationController: Sendable {
             t.column(PushToken.id, primaryKey: true)
             t.column(PushToken.userID)
             t.column(PushToken.token)
+            t.column(PushToken.authToken)
             t.column(PushToken.type)
         })
     }
 
-    func registerPushToken(_ dto: PushTokenDTO, for user: User) throws {
+    func registerPushToken(_ dto: PushTokenDTO, for auth: ServerAuthentication) throws {
         let matchingTokens = try db.count(
             PushToken.self,
             PushToken.token == dto.token &&
             PushToken.type == dto.deviceType.rawValue &&
-            PushToken.userID == user.id
+            PushToken.userID == auth.user.id &&
+            PushToken.authToken == auth.token.content
         )
         if matchingTokens > 0 {
             return
@@ -93,7 +98,8 @@ final class NotificationController: Sendable {
         let newToken = PushToken.table.insert(
             PushToken.token <- dto.token,
             PushToken.type <- dto.deviceType.rawValue,
-            PushToken.userID <- user.id
+            PushToken.userID <- auth.user.id,
+            PushToken.authToken <- auth.token.content
         )
         try db.run(newToken)
     }
@@ -152,7 +158,7 @@ final class NotificationController: Sendable {
                     as: PushTokenDTO.self,
                     context: context
                 )
-                try self.registerPushToken(location, for: auth.user)
+                try self.registerPushToken(location, for: auth)
                 return Response(status: .ok)
             }
             .post("notifications/test") { request, context in

@@ -230,5 +230,5 @@ actor HTTPClient {
 extension HTTPClient {
     static nonisolated let localURL = URL(string: "https://barnacle-driven-hornet.ngrok-free.app/api")!
     static nonisolated let productionURL = URL(string: "https://nice.harlanhaskins.com/api")!
-    static nonisolated let baseURL = productionURL
+    static nonisolated let baseURL = localURL
 }

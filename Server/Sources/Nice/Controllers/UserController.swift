@@ -262,19 +262,18 @@ final class UserController: Sendable {
         return try refreshOrCreateToken(userID: user.id)
     }
 
-    func revokeAuthentication(auth: ServerAuthentication, pushToken: String?) throws {
+    func revokeAuthentication(auth: ServerAuthentication) throws {
         try db.transaction {
             let token = Token.find(Token.content == auth.token.content)
             try db.run(token.delete())
             logger.info("Deleted push token for '\(auth.user.username)'")
 
-            if let pushToken {
-                let notification = PushToken.find(PushToken.token == pushToken)
-                try db.run(notification.delete())
-                logger.info("Deleted notification token for '\(auth.user.username)'")
-            } else {
-                logger.info("Not deleting notification token for '\(auth.user.username)'; no token provided")
-            }
+            let notification = PushToken.find(
+                PushToken.authToken == auth.token.content &&
+                PushToken.userID == auth.user.id
+            )
+            let numberDeleted = try db.run(notification.delete())
+            logger.info("Deleted \(numberDeleted) notification tokens for '\(auth.user.username)'")
         }
     }
 
@@ -391,8 +390,7 @@ extension UserController {
             .delete("auth") { request, context in
                 let auth = try context.requireIdentity()
                 do {
-                    let token = request.uri.queryParameters["pushToken"]
-                    try self.revokeAuthentication(auth: auth, pushToken: token.map(String.init))
+                    try self.revokeAuthentication(auth: auth)
                     return Response(status: .ok)
                 } catch {
                     throw HTTPError(.badRequest)

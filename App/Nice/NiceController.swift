@@ -25,7 +25,7 @@ final class NiceController {
     let notificationService: NotificationService
 
     init() {
-        client = HTTPClient(baseURL: HTTPClient.productionURL, authentication: nil, urlSession: .shared)
+        client = HTTPClient(baseURL: HTTPClient.baseURL, authentication: nil, urlSession: .shared)
         authenticator = Authenticator(client: client)
         locationService = LocationService(client: client)
         notificationService = NotificationService(client: client)
