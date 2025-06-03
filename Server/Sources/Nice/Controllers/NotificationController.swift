@@ -40,11 +40,11 @@ final class NotificationController: Sendable {
     }
     let db: Connection
     let users: UserController
-    let apnsNotifier: APNSNotifier
-    let webPushNotifier: WebPushNotifier
+    let apnsNotifier: any Notifier
+    let webPushNotifier: any WebPushNotifierProtocol
     let logger = Logger(label: "NotificationController")
 
-    init(db: Connection, users: UserController, apnsNotifier: APNSNotifier, webPushNotifier: WebPushNotifier) {
+    init(db: Connection, users: UserController, apnsNotifier: any Notifier, webPushNotifier: any WebPushNotifierProtocol) {
         self.db = db
         self.users = users
         self.apnsNotifier = apnsNotifier

@@ -19,7 +19,7 @@ import CryptoKit
 import Crypto
 #endif
 
-struct WebPushNotifier: Notifier {
+struct WebPushNotifier: WebPushNotifierProtocol {
     let logger = Logger(label: "WebPushNotifier")
     let vapidKeys: Secrets.VAPID
     

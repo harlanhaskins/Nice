@@ -100,6 +100,7 @@ final class WeatherController: Sendable {
         }
 
         var entry = entry
+        entry.lastTemperature = Int(forecast.temperature)
 
         if forecast.isNice {
             if suppressNotification {
@@ -107,24 +108,27 @@ final class WeatherController: Sendable {
             } else {
                 do {
                     try await notifications.sendNiceNotification(to: user.id)
+                    entry.lastNotificationDate = Date()
                 } catch {
                     logger.error("Failed to send notification for '\(user.username)': \(error)")
                 }
             }
-            entry.lastNotificationDate = Date()
         } else {
             logger.info("Temperature for user '\(user.username)' is \(forecast.temperature); not sending notification")
         }
 
-        entry.lastTemperature = Int(forecast.temperature)
 
         // Update the entry in the database to mark that we looked it up
         do {
             let lastTimestamp = (entry.lastNotificationDate?.timeIntervalSince1970).map { Int64($0) }
-            try db.run(UserLocation.table.update(
-                UserLocation.lastTemperature <- entry.lastTemperature,
-                UserLocation.lastNotificationDate <- lastTimestamp
-            ))
+
+            let update = UserLocation.table
+                .filter(UserLocation.userID == user.id)
+                .update(
+                    UserLocation.lastTemperature <- entry.lastTemperature,
+                    UserLocation.lastNotificationDate <- lastTimestamp
+                )
+            try db.run(update)
         } catch {
             logger.error("Failed to update user entry for notification: \(error)")
         }

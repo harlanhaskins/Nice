@@ -84,7 +84,7 @@ struct UserControllerTests {
         
         _ = try controller.create(username: username, password: password)
         
-        #expect(throws: UserController.UserError.incorrectPassword(user: username)) {
+        #expect(throws: UserController.UserError.incorrectPassword(user: username.lowercased())) {
             _ = try controller.authenticate(username: username, password: wrongPassword)
         }
     }
@@ -97,7 +97,7 @@ struct UserControllerTests {
         let username = "coachZ"
         let password = "GreatJorb123"
         
-        #expect(throws: UserController.UserError.notFound(username)) {
+        #expect(throws: UserController.UserError.notFound(username.lowercased())) {
             _ = try controller.authenticate(username: username, password: password)
         }
     }
