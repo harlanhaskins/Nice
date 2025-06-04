@@ -16,8 +16,8 @@ struct WeatherPreview: View {
     var region: MKCoordinateRegion {
         MKCoordinateRegion(
             center: CLLocationCoordinate2D(latitude: location.latitude, longitude: location.longitude),
-            latitudinalMeters: 200,
-            longitudinalMeters: 100
+            latitudinalMeters: 1000,
+            longitudinalMeters: 500
         )
     }
 

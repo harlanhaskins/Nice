@@ -9,6 +9,7 @@ import CoreLocation
 import Foundation
 import NiceTypes
 import os.log
+import Contacts
 
 @MainActor
 @Observable
@@ -17,6 +18,7 @@ final class LocationService: NSObject {
     let locationManager = CLLocationManager()
     let logger = Logger(for: LocationService.self)
     var state: AuthorizationState = .indeterminate
+    var preciseLocation: CLLocation?
     var location: CLLocation?
 
     init(client: HTTPClient) {
@@ -28,7 +30,10 @@ final class LocationService: NSObject {
 
     func setInitialLocation(_ location: Location?) {
         if self.location == nil, let location {
-            self.location = CLLocation(latitude: location.latitude, longitude: location.longitude)
+            self.location = CLLocation(
+                latitude: location.latitude,
+                longitude: location.longitude
+            )
         }
     }
 
@@ -62,12 +67,45 @@ final class LocationService: NSObject {
     }
 
     func updateLocation() async {
-        guard let location else { return }
+        guard let location, client.authentication != nil else { return }
         do {
             let loc = Location(location.coordinate)
             try await client.put("location", body: loc)
         } catch {
             logger.error("Failed to update location: \(error)")
+        }
+    }
+    
+    /// Converts a precise CLLocation to a coarse location based on ZIP code
+    /// Returns the geographic center of the ZIP code area for privacy protection
+    /// Falls back to exact coordinates if coarsening fails
+    func coarseLocation(from location: CLLocation) async -> CLLocation {
+        let geocoder = CLGeocoder()
+        
+        do {
+            let placemarks = try await geocoder.reverseGeocodeLocation(location)
+            
+            guard let placemark = placemarks.first,
+                  let postalCode = placemark.postalCode else {
+                logger.warning("No postal code found for location, using exact coordinates")
+                return location
+            }
+            
+            // Forward geocode the postal code to get its center point
+            let forwardPlacemarks = try await geocoder.geocodeAddressString(postalCode)
+            
+            guard let centerPlacemark = forwardPlacemarks.first,
+                  let centerLocation = centerPlacemark.location else {
+                logger.warning("Could not geocode postal code: \(postalCode), using exact coordinates")
+                return location
+            }
+            
+            logger.info("Coarsened location from precise coordinates to ZIP code \(postalCode) center")
+            return centerLocation
+            
+        } catch {
+            logger.error("Failed to coarsen location: \(error), using exact coordinates")
+            return location
         }
     }
 }
@@ -81,10 +119,15 @@ extension LocationService: CLLocationManagerDelegate {
             return
         }
         Task { @MainActor in
+            if let preciseLocation, loc.distance(from: preciseLocation) < 500 {
+                return
+            }
+            self.preciseLocation = loc
+            let coarsenedLocation = await coarseLocation(from: loc)
             let prev = self.location
-            self.location = loc
+            self.location = coarsenedLocation
 
-            if prev == nil || prev!.distance(from: loc) > 100 {
+            if prev == nil || prev!.distance(from: coarsenedLocation) > 100 {
                 await self.updateLocation()
             } else {
                 logger.info("Not updating location; within 100 meters")

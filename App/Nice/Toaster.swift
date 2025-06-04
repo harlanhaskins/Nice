@@ -86,8 +86,11 @@ struct ToasterModifier: ViewModifier {
                             VStack {
                                 Text(toast.message)
                                     .font(.subheadline)
-                                toast.subtitle.map { Text($0) }
+                                if let subtitle = toast.subtitle {
+                                    Text(subtitle)
+                                }
                             }
+                            .lineLimit(3)
                             .padding(.trailing, 12)
                         }
                         .padding(.horizontal, 8)

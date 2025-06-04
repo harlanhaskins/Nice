@@ -8,6 +8,7 @@
 import Foundation
 import NiceTypes
 import os
+import Synchronization
 
 struct APIError: Codable, LocalizedError {
     var message: String
@@ -38,12 +39,17 @@ actor HTTPClient {
 
     let urlSession: URLSession
     let baseURL: URL
-    var authentication: Authentication?
+    let authenticationLock = Mutex<Authentication?>(nil)
+
+    nonisolated var authentication: Authentication? {
+        get { authenticationLock.withLock { $0 } }
+        set { authenticationLock.withLock { $0 = newValue } }
+    }
 
     init(baseURL: URL, authentication: Authentication?, urlSession: URLSession = .shared) {
         self.baseURL = baseURL
         self.urlSession = urlSession
-        self.authentication = authentication
+        self.authenticationLock.withLock { $0 = authentication }
     }
 
     func updateAuthentication(_ authentication: Authentication?) {
@@ -230,5 +236,6 @@ actor HTTPClient {
 extension HTTPClient {
     static nonisolated let localURL = URL(string: "https://barnacle-driven-hornet.ngrok-free.app/api")!
     static nonisolated let productionURL = URL(string: "https://nice.harlanhaskins.com/api")!
-    static nonisolated let baseURL = localURL
+    static nonisolated let baseURL = productionURL
 }
+

@@ -102,7 +102,7 @@ struct MainView: View {
 
     func fetchWeather() async {
         do {
-            guard let location = controller.locationService.location else { return }
+            guard let location = controller.locationService.location, controller.isAuthenticated else { return }
             await controller.locationService.updateLocation()
             let forecast = try await controller.loadForecast()
             weatherState = .forecast(forecast, Location(location.coordinate))

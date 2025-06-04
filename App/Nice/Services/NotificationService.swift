@@ -55,7 +55,7 @@ final class NotificationService: NSObject {
     }
 
     func performNotificationRegistration() async throws {
-        guard await client.authentication != nil, let deviceToken = UserDefaults.standard.pushToken else {
+        guard client.authentication != nil, let deviceToken = UserDefaults.standard.pushToken else {
             return
         }
         guard !hasPushedToken else {

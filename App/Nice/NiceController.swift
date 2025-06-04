@@ -39,6 +39,10 @@ final class NiceController {
         }
     }
 
+    var isAuthenticated: Bool {
+        client.authentication != nil
+    }
+
     func signIn(username: String, password: String) async throws -> Authentication {
         let auth = try await authenticator.signIn(username: username, password: password)
         await onAuthenticate(auth)
