@@ -127,11 +127,7 @@ extension LocationService: CLLocationManagerDelegate {
             let prev = self.location
             self.location = coarsenedLocation
 
-            if prev == nil || prev!.distance(from: coarsenedLocation) > 100 {
-                await self.updateLocation()
-            } else {
-                logger.info("Not updating location; within 100 meters")
-            }
+            await self.updateLocation()
         }
     }
 
