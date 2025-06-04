@@ -14,6 +14,7 @@ class NiceWeatherApp {
         this.bindEvents();
         this.updateUI();
         this.requestPermissions();
+        this.requestLocation(); // Request location on app load
 
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('sw.js')
