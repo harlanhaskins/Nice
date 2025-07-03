@@ -63,7 +63,7 @@ struct WeatherPreview: View {
     }
 
     var body: some View {
-        GroupBox {
+        VStack {
             HStack {
                 temperature
                 VStack(spacing: 10) {
@@ -74,6 +74,8 @@ struct WeatherPreview: View {
             map
         }
         .fontDesign(.rounded)
+        .padding()
+        .glassEffect(in: .rect(cornerRadius: 13))
     }
 }
 

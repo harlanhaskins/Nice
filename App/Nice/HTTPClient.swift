@@ -10,7 +10,7 @@ import NiceTypes
 import os
 import Synchronization
 
-struct APIError: Codable, LocalizedError {
+struct APIError: nonisolated Codable, LocalizedError {
     var message: String
 
     var errorDescription: String? {
@@ -18,7 +18,7 @@ struct APIError: Codable, LocalizedError {
     }
 }
 
-private struct APIErrorResponse: Codable {
+private struct APIErrorResponse: nonisolated Codable {
     var error: APIError
 }
 

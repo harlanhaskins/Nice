@@ -11,7 +11,6 @@ import NiceTypes
 import os.log
 import Contacts
 
-@MainActor
 @Observable
 final class LocationService: NSObject {
     let client: HTTPClient
@@ -111,28 +110,27 @@ final class LocationService: NSObject {
 }
 
 extension LocationService: CLLocationManagerDelegate {
-    nonisolated func locationManager(
+    func locationManager(
         _ manager: CLLocationManager,
         didUpdateLocations locations: [CLLocation]
     ) {
         guard let loc = locations.max(by: { $0.timestamp < $1.timestamp }) else {
             return
         }
-        Task { @MainActor in
+        Task {
             if let preciseLocation, loc.distance(from: preciseLocation) < 500 {
                 return
             }
             self.preciseLocation = loc
             let coarsenedLocation = await coarseLocation(from: loc)
-            let prev = self.location
             self.location = coarsenedLocation
 
             await self.updateLocation()
         }
     }
 
-    nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
-        Task { @MainActor in
+    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        Task {
             checkForAuthorization()
             didBecomeActive()
         }
@@ -152,10 +150,10 @@ extension Location {
 }
 
 extension Logger {
-    init(_ category: String) {
+    nonisolated init(_ category: String) {
         self.init(subsystem: "com.harlanhaskins.Nice", category: category)
     }
-    init(for type: Any.Type) {
+    nonisolated init(for type: Any.Type) {
         self.init(subsystem: "com.harlanhaskins.Nice", category: _typeName(type, qualified: false))
     }
 }

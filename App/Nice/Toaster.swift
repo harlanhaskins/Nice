@@ -34,7 +34,6 @@ struct Toast: Identifiable {
 }
 
 @Observable
-@MainActor
 private final class Breadbox {
     var toasts = [Toast]()
 
@@ -47,11 +46,10 @@ private final class Breadbox {
     }
 }
 
-@MainActor
 public struct PresentToastAction {
     private var breadbox: Breadbox?
 
-    fileprivate nonisolated init(breadbox: Breadbox?) {
+    fileprivate init(breadbox: Breadbox?) {
         self.breadbox = breadbox
     }
 

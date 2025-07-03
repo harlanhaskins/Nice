@@ -10,7 +10,6 @@ import NiceTypes
 import Observation
 import os
 
-@MainActor
 @Observable
 final class Authenticator {
     enum AuthenticationState: Equatable {

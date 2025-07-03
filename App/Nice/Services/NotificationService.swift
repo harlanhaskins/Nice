@@ -11,7 +11,6 @@ import os.log
 import UserNotifications
 import UIKit
 
-@MainActor
 @Observable
 final class NotificationService: NSObject {
     let client: HTTPClient
@@ -78,7 +77,7 @@ final class NotificationService: NSObject {
     }
 
     func registerForNotifications() {
-        Task {
+        Task { @MainActor in
             do {
                 if try await notificationCenter.requestAuthorization(options: [.alert]) {
                     UIApplication.shared.registerForRemoteNotifications()

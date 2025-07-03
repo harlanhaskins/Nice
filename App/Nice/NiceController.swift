@@ -13,8 +13,6 @@ import os.log
 import UserNotifications
 import UIKit
 
-
-@MainActor
 @Observable
 final class NiceController {
     let logger = Logger(for: NiceController.self)
