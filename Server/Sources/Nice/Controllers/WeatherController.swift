@@ -194,7 +194,8 @@ final class WeatherController: Sendable {
     func updateLocation(_ location: Location, forUserID userID: Int64) throws {
         if var entry = self.location(forUserID: userID) {
             entry.location = location
-            try db.run(UserLocation.table.update(
+            let specificUser = UserLocation.find(UserLocation.id == userID)
+            try db.run(specificUser.update(
                 UserLocation.latitude <- location.latitude,
                 UserLocation.longitude <- location.longitude
             ))
