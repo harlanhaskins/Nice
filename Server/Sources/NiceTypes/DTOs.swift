@@ -107,15 +107,15 @@ public struct UserDTO: DTO {
 public struct TokenDTO: DTO {
     /// ID of the user this token belongs to
     public var userID: Int64
-    /// Hex-encoded token string for Authorization header
+    /// JWT token string for Authorization header
     public var token: String
-    /// Expiration timestamp (tokens are valid for 14 days)
-    public var expires: Date
 
-    public init(userID: Int64, token: String, expires: Date) {
+    /// Provided for backwards compatibility with clients
+    public var expires: Date = .now
+
+    public init(userID: Int64, token: String) {
         self.userID = userID
         self.token = token
-        self.expires = expires
     }
 }
 
@@ -153,5 +153,16 @@ public struct PushTokenDTO: DTO {
     public init(token: String, deviceType: DeviceType) {
         self.token = token
         self.deviceType = deviceType
+    }
+}
+
+/// Request payload for logout
+/// Contains notification token to revoke on logout
+public struct LogoutRequest: DTO {
+    /// Notification token to delete
+    public var notificationToken: String
+
+    public init(notificationToken: String) {
+        self.notificationToken = notificationToken
     }
 }

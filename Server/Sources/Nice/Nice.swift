@@ -31,12 +31,17 @@ struct Secrets: Codable {
         /// Contact email for push service
         var contact: String
     }
+    struct JWT: Codable {
+        var secret: String
+    }
     /// Weather API secrets
     var weather: Weather
     /// APNS configuration
     var apns: APNS
     /// Web push configuration
     var vapid: VAPID
+    /// JWT secret key for token signing
+    var jwt: JWT
 }
 
 /// Main application entry point
@@ -48,7 +53,7 @@ struct Nice {
         let secrets = try JSONDecoder().decode(Secrets.self, from: Data(contentsOf: secretsFile))
 
         let connection = try Connection("nice.db")
-        let users = UserController(db: connection)
+        let users = await UserController(db: connection, jwtSecretKey: secrets.jwt.secret)
         try users.createTables()
 
         let apnsNotifier = try APNSNotifier(secrets: secrets.apns)

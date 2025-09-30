@@ -16,6 +16,7 @@ let package = Package(
         .package(url: "https://github.com/stephencelis/SQLite.swift", from: "0.15.3"),
         .package(url: "https://github.com/krzyzanowskim/CryptoSwift", from: "1.8.4"),
         .package(url: "https://github.com/swift-server-community/APNSwift.git", from: "6.0.1"),
+        .package(url: "https://github.com/vapor/jwt-kit.git", from: "5.0.0")
     ],
     targets: [
         .executableTarget(
@@ -26,7 +27,8 @@ let package = Package(
                 .product(name: "APNS", package: "APNSwift"),
                 .product(name: "Hummingbird", package: "hummingbird"),
                 .product(name: "HummingbirdAuth", package: "hummingbird-auth"),
-                .product(name: "SQLite", package: "SQLite.swift")
+                .product(name: "SQLite", package: "SQLite.swift"),
+                .product(name: "JWTKit", package: "jwt-kit"),
             ],
             resources: [
                 .copy("Resources/secrets.json")

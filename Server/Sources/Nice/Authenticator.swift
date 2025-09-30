@@ -60,11 +60,11 @@ final class Authenticator: MiddlewareProtocol {
     /// - Parameter headers: HTTP headers containing authorization information
     /// - Returns: The authenticated user
     /// - Throws: Error if authentication fails or user not found
-    func authentication(headers: HTTPFields) throws -> ServerAuthentication {
+    func authentication(headers: HTTPFields) async throws -> ServerAuthentication {
         let tokenContent = try extractToken(from: headers)
-        let token = try userController.authenticate(token: tokenContent)
-        let user = try userController.user(withID: token.userID)
-        return ServerAuthentication(user: user, token: token)
+        let userID = try await userController.authenticate(token: tokenContent)
+        let user = try userController.user(withID: userID)
+        return ServerAuthentication(user: user, tokenString: tokenContent)
     }
 
     func handle(
@@ -74,7 +74,7 @@ final class Authenticator: MiddlewareProtocol {
     ) async throws -> Response {
         var context = context
         do {
-            context.identity = try authentication(headers: request.headers)
+            context.identity = try await authentication(headers: request.headers)
         } catch {
             throw HTTPError(.unauthorized)
         }

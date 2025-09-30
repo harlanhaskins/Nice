@@ -90,7 +90,14 @@ final class Authenticator {
     }
 
     func signOut() async throws {
-        try await client.delete("auth")
+        // Send notification token if available so server can delete it
+        if let pushToken = UserDefaults.standard.pushToken {
+            let logoutRequest = LogoutRequest(notificationToken: pushToken)
+            try await client.delete("auth", body: logoutRequest)
+        } else {
+            // Fallback if no push token - server will handle gracefully
+            try await client.delete("auth", body: LogoutRequest(notificationToken: ""))
+        }
         await setAuthentication(nil)
     }
 

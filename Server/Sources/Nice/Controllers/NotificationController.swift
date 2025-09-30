@@ -108,7 +108,7 @@ final class NotificationController: Sendable {
             PushToken.token == dto.token &&
             PushToken.type == dto.deviceType.rawValue &&
             PushToken.userID == auth.user.id &&
-            PushToken.authToken == auth.token.content
+            PushToken.authToken == auth.tokenString
         )
         if matchingTokens > 0 {
             return
@@ -117,7 +117,7 @@ final class NotificationController: Sendable {
             PushToken.token <- dto.token,
             PushToken.type <- dto.deviceType.rawValue,
             PushToken.userID <- auth.user.id,
-            PushToken.authToken <- auth.token.content
+            PushToken.authToken <- auth.tokenString
         )
         try db.run(newToken)
     }

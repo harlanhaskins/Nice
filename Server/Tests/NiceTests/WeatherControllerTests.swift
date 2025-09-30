@@ -41,13 +41,14 @@ struct MockWeatherProvider: WeatherProvider {
 @Suite
 struct WeatherControllerTests {
     @Test
-    func testLocationUpdate() throws {
+    func testLocationUpdate() async throws {
         let db = try Connection(.inMemory)
 
-        let users = UserController(
+        let users = await UserController(
             db: db,
             dateProvider: CalendarDateProvider(calendar: .autoupdatingCurrent),
-            passwordHasher: SHA256PasswordHasher()
+            passwordHasher: SHA256PasswordHasher(),
+            jwtSecretKey: "test-key"
         )
         try users.createTables()
 
@@ -64,7 +65,7 @@ struct WeatherControllerTests {
         let username = "trogdor"
         let password = "BurnInatingTh3Countryside!"
 
-        let (user, _) = try users.create(username: username, password: password)
+        let (user, _) = try await users.create(username: username, password: password)
 
         let location = Location(latitude: 34.5, longitude: -82.3)
         try weather.updateLocation(location, forUserID: user.id)
@@ -79,10 +80,11 @@ struct WeatherControllerTests {
     func testWeatherJobOnlyUpdatesCorrectUser() async throws {
         let db = try Connection(.inMemory)
 
-        let users = UserController(
+        let users = await UserController(
             db: db,
             dateProvider: CalendarDateProvider(calendar: .autoupdatingCurrent),
-            passwordHasher: SHA256PasswordHasher()
+            passwordHasher: SHA256PasswordHasher(),
+            jwtSecretKey: "test-key"
         )
         try users.createTables()
 
@@ -97,8 +99,8 @@ struct WeatherControllerTests {
         try weather.createTables()
 
         // Create two users with locations
-        let (user1, _) = try users.create(username: "user1", password: "password1")
-        let (user2, _) = try users.create(username: "user2", password: "password2")
+        let (user1, _) = try await users.create(username: "user1", password: "password1")
+        let (user2, _) = try await users.create(username: "user2", password: "password2")
 
         let location1 = Location(latitude: 34.5, longitude: -82.3)
         let location2 = Location(latitude: 40.7, longitude: -74.0)

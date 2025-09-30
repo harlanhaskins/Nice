@@ -11,7 +11,20 @@ import NiceTypes
 import Foundation
 import Hummingbird
 import HummingbirdAuth
+import JWTKit
 import Logging
+
+/// JWT payload for authentication tokens
+/// Contains user ID and expiration claims
+struct AuthPayload: JWTPayload {
+    var sub: SubjectClaim  // userID as string
+    var exp: ExpirationClaim  // 14 days from issuance
+    var iat: IssuedAtClaim  // issued at timestamp
+
+    func verify(using algorithm: some JWTAlgorithm) async throws {
+        try exp.verifyNotExpired()
+    }
+}
 
 /// Database model for user accounts
 /// Stores authentication credentials with secure password hashing
@@ -41,45 +54,12 @@ extension User {
     }
 }
 
-/// Database model for authentication tokens
-/// Each user has at most one active token (1:1 relationship)
-struct Token: Model, Codable {
-    /// Database column expressions for type-safe queries
-    static let id = Expression<Int64>("id")
-    static let userID = Expression<Int64>("userID")
-    static let content = Expression<String>("content")
-    static let expires = Expression<Int64>("expires")
-
-    /// Unique token identifier
-    var id: Int64
-    /// Foreign key to user table (unique constraint)
-    var userID: Int64
-    /// Hex-encoded token string (unique)
-    var content: String
-    /// Expiration timestamp (14 days from creation/refresh)
-    var expires: Date
-
-    /// Convert to DTO for API responses
-    var dto: TokenDTO {
-        TokenDTO(userID: userID, token: content, expires: expires)
-    }
-}
-
 extension Authentication {
-    init(user: User, token: Token, location: Location?) {
+    init(auth: ServerAuthentication, location: Location?) {
         self.init(
-            user: UserDTO(id: user.id, username: user.username, location: location),
-            token: token.dto
+            user: UserDTO(id: auth.user.id, username: auth.user.username, location: location),
+            token: TokenDTO(userID: auth.user.id, token: auth.tokenString)
         )
-    }
-}
-
-extension Token {
-    init(_ row: Row) {
-        id = row[Token.id]
-        userID = row[Token.userID]
-        content = row[Token.content]
-        expires = Date(timeIntervalSince1970: TimeInterval(row[Token.expires]))
     }
 }
 
@@ -166,20 +146,24 @@ final class UserController: Sendable {
     let db: Connection
     let dateProvider: DateProviding
     let passwordHasher: PasswordHashing
+    let jwtKeys: JWTKeyCollection
     let logger = Logger(label: "UserController")
 
     init(
         db: Connection,
         dateProvider: DateProviding = CalendarDateProvider(calendar: .current),
-        passwordHasher: PasswordHashing = ScryptPasswordHasher()
-    ) {
+        passwordHasher: PasswordHashing = ScryptPasswordHasher(),
+        jwtSecretKey: String
+    ) async {
         self.db = db
         self.dateProvider = dateProvider
         self.passwordHasher = passwordHasher
+        self.jwtKeys = await JWTKeyCollection()
+            .add(hmac: HMACKey(from: jwtSecretKey), digestAlgorithm: .sha256)
     }
 
-    /// Initialize database tables for users and tokens
-    /// Creates tables only if they don't already exist
+    /// Initialize database tables for users
+    /// Creates table only if it doesn't already exist
     func createTables() throws {
         let userColumns = try db.schema.columnDefinitions(table: "user")
         if !userColumns.isEmpty {
@@ -191,13 +175,6 @@ final class UserController: Sendable {
             t.column(User.username, unique: true)
             t.column(User.passwordHash)
             t.column(User.salt)
-        })
-
-        try db.run(Token.table.create { t in
-            t.column(Token.id, primaryKey: true)
-            t.column(Token.userID, unique: true)
-            t.column(Token.content, unique: true)
-            t.column(Token.expires)
         })
     }
 
@@ -212,49 +189,28 @@ final class UserController: Sendable {
         return user
     }
 
-    func refreshExpiration(for token: inout Token) throws {
-        let newExpiration = dateProvider.newExpirationDate
-        let seconds = Int64(newExpiration.timeIntervalSince1970)
-        let refreshToken = Token.table.filter(Token.content == token.content).update(
-            Token.expires <- seconds)
-        try db.run(refreshToken)
-        token.expires = Date(timeIntervalSince1970: TimeInterval(seconds))
-    }
-
-    func refreshOrCreateToken(userID: Int64) throws -> Token {
-        if var token = try db.first(Token.self, Token.userID == Int64(userID)) {
-            try refreshExpiration(for: &token)
-            return token
-        } else {
-            let uuid = withUnsafeBytes(of: UUID().uuid, Array.init)
-            var token = Token(
-                id: 0,
-                userID: userID,
-                content: uuid.toHexString(),
-                expires: dateProvider.newExpirationDate
-            )
-            let query = Token.table.insert(
-                Token.userID <- userID,
-                Token.content <- token.content,
-                Token.expires <- Int64(token.expires.timeIntervalSince1970)
-            )
-            token.id = try db.run(query)
-            return token
-        }
+    /// Generate a new JWT token for the given user
+    /// - Parameter userID: ID of the user to create token for
+    /// - Returns: JWT string
+    func createToken(userID: Int64) async throws -> String {
+        let payload = AuthPayload(
+            sub: SubjectClaim(value: "\(userID)"),
+            exp: ExpirationClaim(value: dateProvider.newExpirationDate),
+            iat: IssuedAtClaim(value: dateProvider.now)
+        )
+        return try await jwtKeys.sign(payload)
     }
 
     /// Delete user and all associated data (cascading delete)
-    /// Removes user record, tokens, locations, and push tokens
+    /// Removes user record, locations, and push tokens
     /// - Parameter user: User to delete
     /// - Throws: Database errors if deletion fails
     func deleteUser(_ user: User) throws {
-        // Delete the user record, all authorization tokens, all locations,
-        // and all push tokens for this user.
+        // Delete the user record, all locations, and all push tokens for this user.
 
         let deletions: [(Model.Type, Delete)] = [
             (User.self, User.find(User.id == user.id).delete()),
             (PushToken.self, PushToken.find(PushToken.userID == user.id).delete()),
-            (Token.self, Token.find(Token.userID == user.id).delete()),
             (UserLocation.self, UserLocation.find(UserLocation.userID == user.id).delete())
         ]
 
@@ -272,34 +228,25 @@ final class UserController: Sendable {
         }
     }
 
-    /// Authenticate user by token and refresh expiration
-    /// - Parameter token: Hex-encoded authentication token
-    /// - Returns: Valid token with refreshed expiration
-    /// - Throws: UserError if token is invalid or expired
-    func authenticate(token: String) throws -> Token {
-        guard var token = try db.first(Token.self, Token.content == token) else {
+    /// Authenticate user by verifying JWT token
+    /// - Parameter token: JWT authentication token
+    /// - Returns: User ID extracted from JWT
+    /// - Throws: JWTError if token is invalid or expired
+    func authenticate(token: String) async throws -> Int64 {
+        let payload = try await jwtKeys.verify(token, as: AuthPayload.self)
+        guard let userID = Int64(payload.sub.value) else {
             throw UserError.notFound(token)
         }
-        if token.expires < dateProvider.now {
-            throw UserError.tokenExpired
-        }
-
-        do {
-            try refreshExpiration(for: &token)
-        } catch {
-            print("Failed to refresh token for user \(token.userID)")
-        }
-
-        return token
+        return userID
     }
 
-    /// Authenticate user by credentials and return/create token
+    /// Authenticate user by credentials and generate JWT token
     /// - Parameters:
     ///   - username: User's username (will be normalized)
     ///   - password: Plain text password
-    /// - Returns: Authentication token for API access
+    /// - Returns: Tuple of (user, JWT string)
     /// - Throws: UserError for invalid credentials
-    func authenticate(username: String, password: String) throws -> Token {
+    func authenticate(username: String, password: String) async throws -> (User, String) {
         let username = cleanUsername(username)
         guard let user = try db.first(User.self, User.username == username) else {
             throw UserError.notFound(username)
@@ -309,22 +256,21 @@ final class UserController: Sendable {
         if digest != user.passwordHash {
             throw UserError.incorrectPassword(user: username)
         }
-        return try refreshOrCreateToken(userID: user.id)
+        let jwt = try await createToken(userID: user.id)
+        return (user, jwt)
     }
 
-    func revokeAuthentication(auth: ServerAuthentication) throws {
-        try db.transaction {
-            let token = Token.find(Token.content == auth.token.content)
-            try db.run(token.delete())
-            logger.info("Deleted push token for '\(auth.user.username)'")
-
-            let notification = PushToken.find(
-                PushToken.authToken == auth.token.content &&
-                PushToken.userID == auth.user.id
-            )
-            let numberDeleted = try db.run(notification.delete())
-            logger.info("Deleted \(numberDeleted) notification tokens for '\(auth.user.username)'")
-        }
+    /// Revoke notification token for user (JWT tokens cannot be revoked)
+    /// - Parameters:
+    ///   - auth: Authenticated user context
+    ///   - notificationToken: Specific notification token to delete
+    func revokeNotificationToken(auth: ServerAuthentication, notificationToken: String) throws {
+        let query = PushToken.find(
+            PushToken.token == notificationToken &&
+            PushToken.userID == auth.user.id
+        )
+        let numberDeleted = try db.run(query.delete())
+        logger.info("Deleted \(numberDeleted) notification token(s) for '\(auth.user.username)'")
     }
 
     func cleanUsername(_ username: String) -> String {
@@ -336,13 +282,13 @@ final class UserController: Sendable {
     ///   - username: Desired username (must be unique)
     ///   - password: Plain text password (8+ characters)
     ///   - location: Optional initial location
-    /// - Returns: Tuple of created user and authentication token
+    /// - Returns: Tuple of (user, JWT string)
     /// - Throws: UserError for validation failures or conflicts
     func create(
         username: String,
         password: String,
         location: Location? = nil
-    ) throws -> (User, Token) {
+    ) async throws -> (User, String) {
         let username = cleanUsername(username)
         guard password.count >= 8 else {
             throw UserError.passwordNotLongEnough
@@ -357,7 +303,7 @@ final class UserController: Sendable {
             guard try db.count(User.self, User.username == username) == 0 else {
                 throw UserError.userAlreadyExists(username)
             }
-            
+
             // Keep the user creation inside the transaction
             let insertion = User.table.insert(
                 User.username <- username,
@@ -381,8 +327,8 @@ final class UserController: Sendable {
             username: username,
             passwordHash: digest,
             salt: salt)
-        let newToken = try refreshOrCreateToken(userID: id)
-        return (newUser, newToken)
+        let jwt = try await createToken(userID: id)
+        return (newUser, jwt)
     }
 }
 
@@ -398,18 +344,18 @@ extension UserController {
                     context: context
                 )
                 do {
-                    let token = try self.authenticate(
+                    let (user, jwt) = try await self.authenticate(
                         username: authenticateUser.username,
                         password: authenticateUser.password
                     )
-                    let location = weather.location(forUserID: token.userID)?.location
+                    let location = weather.location(forUserID: user.id)?.location
                     return Authentication(
                         user: UserDTO(
-                            id: token.userID,
-                            username: authenticateUser.username,
+                            id: user.id,
+                            username: user.username,
                             location: location
                         ),
-                        token: TokenDTO(userID: token.userID, token: token.content, expires: token.expires)
+                        token: TokenDTO(userID: user.id, token: jwt)
                     )
                 } catch let error as UserError {
                     switch error {
@@ -428,12 +374,15 @@ extension UserController {
                     context: context
                 )
                 do {
-                    let (user, token) = try self.create(
+                    let (user, jwt) = try await self.create(
                         username: createUser.username,
                         password: createUser.password,
                         location: createUser.location
                     )
-                    return Authentication(user: user, token: token, location: nil)
+                    return Authentication(
+                        user: UserDTO(id: user.id, username: user.username, location: nil),
+                        token: TokenDTO(userID: user.id, token: jwt)
+                    )
                 } catch let error as UserController.UserError {
                     throw HTTPError(.unauthorized, message: error.message)
                 }
@@ -447,12 +396,13 @@ extension UserController {
             .put("auth") { request, context in
                 let auth = try context.requireIdentity()
                 let location = weather.location(forUserID: auth.user.id)?.location
-                return Authentication(user: auth.user, token: auth.token, location: location)
+                return Authentication(auth: auth, location: location)
             }
             .delete("auth") { request, context in
                 let auth = try context.requireIdentity()
+                let logoutRequest = try await request.decode(as: LogoutRequest.self, context: context)
                 do {
-                    try self.revokeAuthentication(auth: auth)
+                    try self.revokeNotificationToken(auth: auth, notificationToken: logoutRequest.notificationToken)
                     return Response(status: .ok)
                 } catch {
                     throw HTTPError(.badRequest)

@@ -432,11 +432,29 @@ class NiceWeatherApp {
         if (!this.auth) return;
 
         try {
+            // Get the push subscription to send as notification token
+            let notificationToken = '';
+            if ('serviceWorker' in navigator && 'PushManager' in window) {
+                try {
+                    const registration = await navigator.serviceWorker.ready;
+                    const subscription = await registration.pushManager.getSubscription();
+                    if (subscription) {
+                        notificationToken = JSON.stringify(subscription);
+                    }
+                } catch (subError) {
+                    console.error('Failed to get push subscription for logout:', subError);
+                }
+            }
+
             await fetch(`${this.baseURL}/auth`, {
                 method: 'DELETE',
                 headers: {
+                    'Content-Type': 'application/json',
                     'Authorization': `Bearer ${this.auth.token.token}`,
                 },
+                body: JSON.stringify({
+                    notificationToken: notificationToken
+                }),
             });
         } catch (error) {
             console.error('Sign out error:', error);

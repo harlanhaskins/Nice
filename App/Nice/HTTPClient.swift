@@ -189,6 +189,15 @@ actor HTTPClient {
         try await send(.delete, path: path, query: query, headers: headers)
     }
 
+    func delete<Body: Encodable>(
+        _ path: String,
+        body: Body,
+        query: [URLQueryItem] = [],
+        headers: [String: String] = [:]
+    ) async throws {
+        try await send(.delete, path: path, query: query, headers: headers, body: body)
+    }
+
     func post<Body: Encodable, Result: Decodable>(
         _ path: String,
         body: Body?,
