@@ -94,7 +94,7 @@ struct Nice {
         users.addUnauthenticatedRoutes(to: apiGroup, weather: weather)
         notifications.addPublicRoutes(to: apiGroup)
 
-        let authGroup = apiGroup.add(middleware: Authenticator(userController: users))
+        let authGroup = apiGroup.add(middleware: Authenticator(userController: users, notificationController: notifications))
         users.addRoutes(to: authGroup, weather: weather)
         notifications.addRoutes(to: authGroup)
         weather.addRoutes(to: authGroup)

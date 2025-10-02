@@ -32,11 +32,16 @@ typealias AuthenticatedRequestContext = BasicAuthRequestContext<ServerAuthentica
 final class Authenticator: MiddlewareProtocol {
     /// The UserController instance to use for authentication
     private let userController: UserController
-    
+    /// The NotificationController instance to clean up invalid tokens
+    private let notificationController: NotificationController?
+
     /// Creates a new authenticator
-    /// - Parameter userController: The UserController instance to use
-    init(userController: UserController) {
+    /// - Parameters:
+    ///   - userController: The UserController instance to use
+    ///   - notificationController: Optional NotificationController for cleaning up push tokens
+    init(userController: UserController, notificationController: NotificationController? = nil) {
         self.userController = userController
+        self.notificationController = notificationController
     }
 
     /// Extracts token from HTTP headers
@@ -76,6 +81,11 @@ final class Authenticator: MiddlewareProtocol {
         do {
             context.identity = try await authentication(headers: request.headers)
         } catch {
+            // If authentication fails, clean up any push tokens associated with this auth token
+            if let tokenString = try? extractToken(from: request.headers),
+               let notificationController = notificationController {
+                try? notificationController.deletePushTokens(withAuthToken: tokenString)
+            }
             throw HTTPError(.unauthorized)
         }
         return try await next(request, context)

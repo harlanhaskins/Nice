@@ -22,6 +22,7 @@ struct PushToken: Model {
     static let token = Expression<String>("token")
     static let authToken = Expression<String>("authToken")
     static let type = Expression<String>("type")
+    static let createdAt = Expression<Int64>("createdAt")
 
     /// Unique push token record identifier
     var id: Int64
@@ -33,6 +34,8 @@ struct PushToken: Model {
     var token: String
     /// Device type string (iOS or web)
     var type: String
+    /// Timestamp when token was created
+    var createdAt: Int64
 
     init(_ row: Row) {
         id = row[Self.id]
@@ -40,6 +43,7 @@ struct PushToken: Model {
         token = row[Self.token]
         type = row[Self.type]
         authToken = row[Self.authToken]
+        createdAt = row[Self.createdAt]
     }
 }
 
@@ -58,13 +62,15 @@ final class NotificationController: Sendable {
     let users: UserController
     let apnsNotifier: any Notifier
     let webPushNotifier: any WebPushNotifierProtocol
+    let dateProvider: DateProviding
     let logger = Logger(label: "NotificationController")
 
-    init(db: Connection, users: UserController, apnsNotifier: any Notifier, webPushNotifier: any WebPushNotifierProtocol) {
+    init(db: Connection, users: UserController, apnsNotifier: any Notifier, webPushNotifier: any WebPushNotifierProtocol, dateProvider: DateProviding = CalendarDateProvider(calendar: .current)) {
         self.db = db
         self.users = users
         self.apnsNotifier = apnsNotifier
         self.webPushNotifier = webPushNotifier
+        self.dateProvider = dateProvider
     }
 
     deinit {
@@ -94,32 +100,58 @@ final class NotificationController: Sendable {
             t.column(PushToken.token)
             t.column(PushToken.authToken)
             t.column(PushToken.type)
+            t.column(PushToken.createdAt)
         })
     }
 
+    /// Delete all push tokens associated with a specific auth token
+    /// Used to clean up tokens when an auth token expires or is invalidated
+    /// - Parameter authToken: The auth token string to match
+    func deletePushTokens(withAuthToken authToken: String) throws {
+        let deletedCount = try db.run(PushToken.find(PushToken.authToken == authToken).delete())
+        if deletedCount > 0 {
+            logger.info("Deleted \(deletedCount) push token(s) with invalid auth token")
+        }
+    }
+
     /// Register a push notification token for a user
-    /// Prevents duplicate registrations and binds token to auth session
+    /// Overwrites existing token for same device/user combo to prevent duplicates
     /// - Parameters:
     ///   - dto: Push token registration data
     ///   - auth: Current user authentication
     func registerPushToken(_ dto: PushTokenDTO, for auth: ServerAuthentication) throws {
-        let matchingTokens = try db.count(
+        // Check if token already exists for this user/device combination
+        let existing = try db.first(
             PushToken.self,
             PushToken.token == dto.token &&
             PushToken.type == dto.deviceType.rawValue &&
-            PushToken.userID == auth.user.id &&
-            PushToken.authToken == auth.tokenString
+            PushToken.userID == auth.user.id
         )
-        if matchingTokens > 0 {
-            return
+
+        let now = Int64(dateProvider.now.timeIntervalSince1970)
+
+        if let existing {
+            // If the database is up to date, no need to do anything.
+            if existing.authToken == auth.tokenString {
+                return
+            }
+
+            // Update existing token with new authToken and createdAt
+            try db.run(PushToken.find(PushToken.id == existing.id).update(
+                PushToken.authToken <- auth.tokenString,
+                PushToken.createdAt <- now
+            ))
+        } else {
+            // Insert new token
+            let newToken = PushToken.table.insert(
+                PushToken.token <- dto.token,
+                PushToken.type <- dto.deviceType.rawValue,
+                PushToken.userID <- auth.user.id,
+                PushToken.authToken <- auth.tokenString,
+                PushToken.createdAt <- now
+            )
+            try db.run(newToken)
         }
-        let newToken = PushToken.table.insert(
-            PushToken.token <- dto.token,
-            PushToken.type <- dto.deviceType.rawValue,
-            PushToken.userID <- auth.user.id,
-            PushToken.authToken <- auth.tokenString
-        )
-        try db.run(newToken)
     }
 
     /// Send "nice weather" notification to all user's devices

@@ -53,6 +53,7 @@ struct WeatherControllerTests {
         try users.createTables()
 
         let notificationController = NotificationController(db: db, users: users, apnsNotifier: MockNotifier(), webPushNotifier: MockWebPushNotifier())
+        try notificationController.createTables()
 
         let weather = WeatherController(
             db: db,
@@ -89,6 +90,7 @@ struct WeatherControllerTests {
         try users.createTables()
 
         let notificationController = NotificationController(db: db, users: users, apnsNotifier: MockNotifier(), webPushNotifier: MockWebPushNotifier())
+        try notificationController.createTables()
 
         let weather = WeatherController(
             db: db,
